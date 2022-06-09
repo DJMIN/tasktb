@@ -1,0 +1,13 @@
+fastapi
+requests
+uvicorn
+click
+sqlalchemy
+python-multipart
+wheel
+twine
+pycryptodome
+werkzeug
+pydantic
+python-jose
+guesstime
