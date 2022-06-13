@@ -11,3 +11,6 @@ werkzeug
 pydantic
 python-jose
 guesstime
+orjson
+psycopg2
+walrus

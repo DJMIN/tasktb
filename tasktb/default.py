@@ -1,6 +1,7 @@
 WEB_HOST = '127.0.0.1'
 WEB_PORT = 5127
 TABLE_NAME_TASKINSTANCE = 'taskinstance'
+TIME_RETRY_DB_GET = 5
 
 """
 常用数据库的创建数据库连接方法

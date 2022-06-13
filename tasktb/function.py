@@ -14,10 +14,23 @@ def get_task(project, tasktype, default=None, manager_url=f'{WEB_HOST}:{WEB_PORT
     return result
 
 
-def list_task(project, tasktype, manager_url=f'{WEB_HOST}:{WEB_PORT}'):
+def list_task(project, tasktype, size=10, manager_url=f'{WEB_HOST}:{WEB_PORT}'):
     result = requests.post(f'http://{manager_url}/api/item/{TABLE_NAME_TASKINSTANCE}/list', json={
-        'project': project,
-        'tasktype': tasktype,
+        "filters": [
+            {
+                'key': 'project',
+                "value": project,
+                'like': False,
+                'typematch': True,
+            }, {
+                'key': 'tasktype',
+                "value": tasktype,
+                'like': False,
+                'typematch': True,
+            }
+        ],
+        "pageSize": size,
+        "page": 1
     }).json()
     return result
 
@@ -42,3 +55,4 @@ if __name__ == '__main__':
     # print(set_task('p', 1, 'test1'))
     # print(get_task('p', 1))
     print(list_task('p', 1))
+    print(list_task('p', '1'))

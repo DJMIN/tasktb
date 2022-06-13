@@ -237,6 +237,7 @@ class ListItemParam(BaseModel):
         'key': 'user',
         "value": "未登录",
         'like': True,
+        'typematch': True,  # True匹配类型，不会自动转成str来搜索
     }])
     sort: Optional[list] = Field([], description="排序", example=[{
         'key': 'timecreate',
@@ -289,7 +290,7 @@ async def list_item(
         ftr_d = []
 
         for fd in data.get('filters', []):
-            f_nk, f_v, like = fd['key'], fd['value'], fd.get('like')
+            f_nk, f_v, like, typematch = fd['key'], fd['value'], fd.get('like'), fd.get('typematch')
             if "___" in f_nk:
                 ftr_table_name, f_k = f_nk.split('___')
             else:
@@ -299,6 +300,8 @@ async def list_item(
                 ftr_d.append(
                     func.cast(getattr(ftr_table_cls, f_k), TEXT()) == f_v if not isinstance(
                         f_v, str) else func.cast(getattr(ftr_table_cls, f_k), TEXT()).like(f"%{f_v}%"))
+            elif typematch:
+                ftr_d.append(getattr(ftr_table_cls, f_k) == f_v)
             else:
                 ftr_d.append(func.cast(getattr(ftr_table_cls, f_k), TEXT()) == f_v)
 
