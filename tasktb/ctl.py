@@ -30,13 +30,15 @@ def ctl():
 @click.option('-h', '--host', default="0.0.0.0", help='web管理端绑定host')
 @click.option('-p', '--port', default=WEB_PORT, help='web管理端绑定端口号')
 @click.option('-f', '--file', default="", help='web管理端sqlite数据库存储位置路径')
-def run(host, port, file):
+@click.option('-u', '--url', default="", help='web管理端数据库存储位置路径URL')
+def run(host, port, file, url):
     """web manager runner"""
     from tasktb.default import set_url, SQLALCHEMY_DATABASE_URL
     if file:
         file_path = os.path.realpath(file)
-
         set_url(f'sqlite:///{file_path}')
+    elif url:
+        set_url(url)
 
     from tasktb.model import init_db
     init_db()

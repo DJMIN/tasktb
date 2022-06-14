@@ -9,6 +9,10 @@
 ```shell script
 pip install tasktb
 
+
+python -m tasktb.ctl run -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
+
+
 # 运用sqlite数据库，-f指定数据的保存文件位置，方便备份和加密迁移，-p指定服务端的监听端口
 python -m tasktb.ctl run -p 5127 -f './tasktb.db'
 

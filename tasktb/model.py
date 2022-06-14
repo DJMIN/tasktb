@@ -122,7 +122,8 @@ class Task(Base, Mixin):
 
 class Taskinstance(Base, Mixin):
     __tablename__ = TABLE_NAME_TASKINSTANCE
-    uuid = Column(VARCHAR(64), primary_key=True)
+    iid = Column(BigInteger, primary_key=True, autoincrement=True)
+    uuid = Column(VARCHAR(64), index=True, unique=True, comment='唯一索引')
     project = Column(VARCHAR(16), index=True, comment='项目')
 
     status = Column(Integer, nullable=False, server_default='0', default=0, comment='任务状态', index=True)

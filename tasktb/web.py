@@ -479,7 +479,10 @@ async def set_items(
         cls_info = cls.get_columns_info()
 
         # Find all customers that needs to be updated and build mappings
-        pk = cls.get_primary_keys()[0]
+        pk = 'uuid'
+        pkd = getattr(cls, pk)
+        has_iid = 'iid' in cls_info
+        # pk = cls.get_primary_keys()[0]
         # TODO pks
         # pks = cls.get_primary_keys()
 
@@ -495,8 +498,12 @@ async def set_items(
                 entries_to_update = []
                 entries_to_put = []
                 _t0 = time.time()
-
-                has_in_db = set(r[0] for r in db.query(getattr(cls, pk)).filter(getattr(cls, pk).in_(list(_d[pk] for _d in _data))).all())
+                if has_iid :
+                    has_in_db = {r[0]: r[1] for r in db.query(pkd, getattr(cls, 'iid')).filter(
+                        getattr(cls, pk).in_(list(_d[pk] for _d in _data))).all()}
+                else:
+                    has_in_db = set(r[0] for r in db.query(pkd).filter(
+                        getattr(cls, pk).in_(list(_d[pk] for _d in _data))).all())
 
                 print(
                     "Total time for upsert with MAPPING select "
@@ -508,6 +515,8 @@ async def set_items(
 
                 for _d in _data:
                     if _d[pk] in has_in_db:
+                        if has_iid:
+                            _d['iid'] = has_in_db[_d[pk]]
                         entries_to_update.append(_d)
                     else:
                         entries_to_put.append(_d)
