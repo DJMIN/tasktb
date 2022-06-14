@@ -30,7 +30,6 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger('tasktb.web')
 
-
 item_clss = {cls.__tablename__: cls for cls in (
     model.Task,
     model.Taskinstance,
@@ -61,12 +60,12 @@ def to_str(string):
 
 
 change_type = {
+    "BIGI": to_int,
     "INTE": to_int,
     "VARC": to_str,
     "TEXT": to_str,
     "DATE": to_datetime,
 }
-
 
 app = fastapi.FastAPI()
 
@@ -119,7 +118,7 @@ class AuditWithExceptionContextManager:
 
 
 @app.get('/')
-async def index():
+async def html_index():
     return {
         "server": 'tasktb', "msg": "hello! http://127.0.0.1:7788/html/conf  http://127.0.0.1:7788/html/secret",
         "db": SQLALCHEMY_DATABASE_URL,
@@ -221,7 +220,8 @@ async def get_item(item_name, req: fastapi.Request, db: Session = fastapi.Depend
         print(res)
         if len(res) == 1:
             ctx.res = {'data': getattr(builtins, res[0]['valuetype'])(
-                res[0].get('value')) if res[0]['valuetype'] in dir(builtins) else res[0].value, "raw": res, "res_raw": res[0]}
+                res[0].get('value')) if res[0]['valuetype'] in dir(builtins) else res[0].value, "raw": res,
+                       "res_raw": res[0]}
         elif len(res) > 1:
             ctx.res = {'data': None, 'err': '结果超过两个，请检查', "raw": res, "res_raw": res[0]}
         else:
@@ -251,7 +251,8 @@ class ListItemParam(BaseModel):
     notIn: Optional[dict] = Field({}, description="audit.user not in ['']", example={"audit___user": [""]})
     notNull: Optional[list] = Field([], description="audit.user not null", example=["audit___user"])
     sourceIncludes: Optional[list] = Field([], description="返回表字段", example=["user"])
-    join: Optional[dict] = Field({}, description="audit.user = user.username left join", example={"user": {"user": "username"}})
+    join: Optional[dict] = Field({}, description="audit.user = user.username left join",
+                                 example={"user": {"user": "username"}})
     ifOuterJoin: Optional[bool] = Field(False, description="是否外连接", example=False)
     range: Optional[dict] = Field(
         {},
@@ -259,6 +260,7 @@ class ListItemParam(BaseModel):
         example={"audit___timecreate": {"gte": "2021-10-24 16:25:02", "lt": "2023-11-25 16:25:02"}})
     group: Optional[list] = Field([], description="按照某一组字段 分组统计cnt", example=["url", "headers"])
     like: Optional[bool] = Field(True, description="模糊匹配", example=True)
+    index: Optional[str] = Field('', description="强制索引", example='')
 
 
 @app.post('/api/item/{item_name}/list')
@@ -367,7 +369,12 @@ async def list_item(
             q_param_list = param_list[:]
 
         q = db.query(*q_param_list)
-
+        if data.get('index'):
+            q = q.with_hint(
+                cls, f"force index({data.get('index')})", 'mysql'
+            ).with_hint(
+                cls, f"INDEXED BY {data.get('index')}", 'sqlite'
+            )
         if join_d:
             if data.get('ifOuterJoin'):
                 q = q.outerjoin(*join_d)
@@ -382,13 +389,14 @@ async def list_item(
             q = q.order_by(
                 *(getattr(getattr(cls, flr['key']), flr['value'])()
                   for flr in sort if flr['value'].lower() in ['desc', 'asc']))
+        total = q.count()
+
         if offset and offset >= 0:
             q = q.offset(offset)
         if limit and limit > 0:
             q = q.limit(limit)
 
         sql_code = str(q)
-        total = q.count()
 
         results = q.all()
         vres = []
@@ -459,6 +467,108 @@ async def set_item(
     return ctx.res
 
 
+@app.post('/api/items/{item_name}')
+async def set_items(
+        item_name, req: fastapi.Request,
+        db: Session = fastapi.Depends(get_db),
+        db_log: Session = fastapi.Depends(get_db)):
+    """merge many"""
+    async with AuditWithExceptionContextManager(db_log, req, a_cls=model.Audit) as ctx:
+        data = await get_req_data(req)
+        cls = item_clss[item_name]
+        cls_info = cls.get_columns_info()
+
+        # Find all customers that needs to be updated and build mappings
+        pk = cls.get_primary_keys()[0]
+        # TODO pks
+        # pks = cls.get_primary_keys()
+
+        t0 = time.time()
+
+        from sqlalchemy.dialects.postgresql import insert as insert_func_postgresql
+        # from sqlalchemy.dialects.mysql import insert as insert_func_mysql
+
+        values = [{k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in d.items()} for d in data['data']]
+
+        if SQLALCHEMY_DATABASE_URL.startswith('mysql'):
+            def bulk_upsert_mappings(_data):
+                entries_to_update = []
+                entries_to_put = []
+                _t0 = time.time()
+
+                has_in_db = set(r[0] for r in db.query(getattr(cls, pk)).filter(getattr(cls, pk).in_(list(_d[pk] for _d in _data))).all())
+
+                print(
+                    "Total time for upsert with MAPPING select "
+                    + str(len(_data))
+                    + " records "
+                    + str(time.time() - t0)
+                    + " sec"
+                )
+
+                for _d in _data:
+                    if _d[pk] in has_in_db:
+                        entries_to_update.append(_d)
+                    else:
+                        entries_to_put.append(_d)
+
+                print(f'put:{len(entries_to_put)}')
+                if entries_to_put:
+                    _stmt = cls.__table__.insert()
+                    model.engine.execute(
+                        _stmt,
+                        entries_to_put
+                    )
+
+                # db.bulk_insert_mappings(cls, entries_to_put)
+                if entries_to_update:
+                    db.bulk_update_mappings(cls, entries_to_update)
+                    db.commit()
+
+                print(
+                    "Total time for upsert with MAPPING update "
+                    + str(len(_data))
+                    + " records "
+                    + str(time.time() - t0)
+                    + " sec"
+                    + " inserted : "
+                    + str(len(entries_to_put))
+                    + " - updated : "
+                    + str(len(entries_to_update))
+                )
+
+            bulk_upsert_mappings(values)
+        elif SQLALCHEMY_DATABASE_URL.startswith('postgresql'):
+            insert_func = insert_func_postgresql
+            stmt = insert_func(cls).values(values)
+            stmt = stmt.on_conflict_do_update(
+                # Let's use the constraint name which was visible in the original posts error msg
+                constraint=pk,
+
+                # The columns that should be updated on conflict
+                set_={
+                    key: getattr(stmt.excluded, key)
+                    for key in cls_info
+                }
+            )
+            model.engine.execute(
+                stmt
+            )
+        else:
+            stmt = cls.__table__.insert()
+            stmt = stmt.prefix_with("OR REPLACE")
+            model.engine.execute(
+                stmt,
+                values
+            )
+        model.engine.execute("select 1").scalar()
+        # db.execute("VACUUM")  # 清理已删除的文件空间
+        # db.commit()
+        res = f"SqlAlchemy Core Insert: Total time for {len(data['data'])} records " + str(time.time() - t0) + " secs"
+        ctx.res = ctx.format_res(res)
+    return ctx.res
+
+
 @app.delete('/api/item/{item_name}')
 async def del_item(item_name, body: ListItemParam,
                    req: fastapi.Request, db: Session = fastapi.Depends(get_db)):
@@ -502,7 +612,7 @@ async def del_s_item_pk(
         cls = item_clss[item_name]
         db.query(cls).delete()
         db.commit()
-        db.execute("VACUUM")   # 清理已删除的文件空间
+        db.execute("VACUUM")  # 清理已删除的文件空间
         db.commit()
         ctx.res = {
             "server_time": time.time(),

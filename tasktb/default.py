@@ -55,8 +55,54 @@ engine = create_engine('sqlite:///AiTestOps.db?check_same_thread=False', echo=Tr
 echo：echo默认为False，表示不打印执行的SQL语句等较详细的执行信息，改为Ture表示让其打印。
 check_same_thread：check_same_thread默认为 False，sqlite默认建立的对象只能让建立该对象的线程使用，而sqlalchemy是多线程的，所以我们需要指定check_same_thread=False来让建立的对象任意线程都可使用。
 """
+
+
+"""
+# 连接多个数据库
+from sqlalchemy import create_engine, MetaData, Table,Column,Integer,select
+from sqlalchemy.orm import mapper, sessionmaker
+from sqlite3 import dbapi2 as sqlite
+from sqlalchemy.engine.reflection import Inspector
+
+class Bookmarks(object):
+    pass
+
+class BookmarksB(object):
+    pass
+
+
+
+def loadSession():
+    engine = create_engine('sqlite://', echo=True)
+    engine.execute("attach database 'database_b' as BB;")
+    engine.execute("attach database 'database_a' as AA;")
+    metadata = MetaData(engine)
+
+
+    inspector = Inspector.from_engine(engine)
+    print inspector.get_table_names()
+
+    moz_bookmarks = Table('table_a', metadata,Column("id", Integer, primary_key=True),schema='AA', autoload=True)
+    mapper(Bookmarks, moz_bookmarks)
+    moz_bookmarksB = Table('table_b', metadata,Column("id", Integer, primary_key=True),schema='BB', autoload=True)
+    mapper(BookmarksB, moz_bookmarksB)
+
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    return session
+
+if __name__ =="__main__":
+    session = loadSession()
+    res = session.query(Bookmarks).all()
+    for m in res:
+        print m.msisdn,m.id
+
+    #print list(select([moz_bookmarks, moz_bookmarksB], moz_bookmarks.c.b_id == moz_bookmarksB.c.id).execute())
+"""
+
 # SQLALCHEMY_DATABASE_URL: str = 'sqlite:///:memory:'
-SQLALCHEMY_DATABASE_URL: str = 'sqlite:///tasktb.db'
+SQLALCHEMY_DATABASE_URL: str = 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
+# SQLALCHEMY_DATABASE_URL: str = 'sqlite:///tasktb.db'
 
 
 def set_web_port(port):

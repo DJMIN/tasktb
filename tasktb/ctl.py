@@ -29,18 +29,19 @@ def ctl():
 @click.command()
 @click.option('-h', '--host', default="0.0.0.0", help='web管理端绑定host')
 @click.option('-p', '--port', default=WEB_PORT, help='web管理端绑定端口号')
-@click.option('-f', '--file', default="./tasktb.db", help='web管理端sqlite数据库存储位置路径')
+@click.option('-f', '--file', default="", help='web管理端sqlite数据库存储位置路径')
 def run(host, port, file):
     """web manager runner"""
-    file_path = os.path.realpath(file)
+    from tasktb.default import set_url, SQLALCHEMY_DATABASE_URL
+    if file:
+        file_path = os.path.realpath(file)
 
-    from tasktb.default import set_url
-    set_url(f'sqlite:///{file_path}')
+        set_url(f'sqlite:///{file_path}')
 
     from tasktb.model import init_db
     init_db()
 
-    click.echo(f'start manager: {host}:{port} db路径: {file_path}')
+    click.echo(f'start manager: {host}:{port} db路径: {SQLALCHEMY_DATABASE_URL}')
     # sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sockobj.settimeout(3)

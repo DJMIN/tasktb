@@ -12,6 +12,7 @@ import walrus
 from tasktb.model import get_db
 from tasktb import default
 from tasktb.server.base import main_manger_process
+from tasktb.function import list_task
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR + '/manager')

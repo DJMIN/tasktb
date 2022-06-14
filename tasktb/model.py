@@ -2,13 +2,15 @@ import json
 import logging
 import traceback
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, VARCHAR, BigInteger, DateTime
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, VARCHAR, BigInteger, DateTime, Index, \
+    TIMESTAMP
 from uuid import uuid1
 import datetime
 import sqlalchemy.exc
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.engine import reflection
 from sqlalchemy.pool import SingletonThreadPool
 from tasktb.default import SQLALCHEMY_DATABASE_URL, TABLE_NAME_TASKINSTANCE
 from tasktb.modelmid import Mixin, CursorDictionConnect
@@ -17,26 +19,29 @@ from fastapi import Request
 
 print(f"db路径: {SQLALCHEMY_DATABASE_URL}")
 
-# 生成一个sqlite SQLAlchemy引擎
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    # echo=True,
-    # poolclass=SingletonThreadPool,  # 多线程优化
-    connect_args={"check_same_thread": False},
-)
+IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith('sqlite')
+if IS_SQLITE:
+    # 生成一个sqlite SQLAlchemy引擎
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        # echo=True,
+        # poolclass=SingletonThreadPool,  # 多线程优化
+        connect_args={"check_same_thread": False},
+    )
+else:
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_size=100,
+        pool_timeout=5,
+        pool_recycle=30,
+        max_overflow=0,
+        pool_pre_ping=True
+    )
+
 engine.execute("select 1").scalar()
-
-# engine = create_engine(
-#     SQLALCHEMY_DATABASE_URL,
-#     pool_size=100,
-#     pool_timeout=5,
-#     pool_recycle=30,
-#     max_overflow=0,
-#     pool_pre_ping=True
-# )
-
 SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 Base = declarative_base()
+insp = reflection.Inspector.from_engine(engine)
 
 
 # # cursor = Cursor()
@@ -50,6 +55,15 @@ Base = declarative_base()
 # def close_db():
 #     # cursor.close()
 #     cursor_diction.close()
+
+
+def print_index():  # print表
+    for name in insp.get_table_names():
+        for index in insp.get_indexes(name):
+            print(f'{name}: {index}')
+
+
+print(print_index())
 
 
 def init_db():  # 初始化表
@@ -108,8 +122,8 @@ class Task(Base, Mixin):
 
 class Taskinstance(Base, Mixin):
     __tablename__ = TABLE_NAME_TASKINSTANCE
-    uuid = Column(String(512), primary_key=True, index=True)
-    project = Column(String(64), index=True, comment='项目')
+    uuid = Column(VARCHAR(64), primary_key=True)
+    project = Column(VARCHAR(16), index=True, comment='项目')
 
     status = Column(Integer, nullable=False, server_default='0', default=0, comment='任务状态', index=True)
     timecanstart = Column(BigInteger, index=True, server_default='0', default=0, comment='任务下次可执行的时间')
@@ -119,15 +133,15 @@ class Taskinstance(Base, Mixin):
 
     qid = Column(Integer, index=True, comment='任务类型索引')
     priority = Column(Integer, nullable=False, server_default='0', default=0, index=True, comment='任务优先级, 越小优先级越高')
-    key = Column(String(64), index=True, comment='任务值索引')
+    key = Column(VARCHAR(32), index=True, comment='任务值索引')
 
-    tasktype = Column(VARCHAR(128), nullable=False, index=True, comment='任务类型')
+    tasktype = Column(VARCHAR(16), nullable=False, index=True, comment='任务类型')
 
     value = Column(Text(), comment='任务值无索引')
-    valuetype = Column(String(64), index=True, comment='任务值类型')
+    valuetype = Column(VARCHAR(16), index=True, comment='任务值类型')
     data = Column(Text, comment='任务值注释')
 
-    tag = Column(VARCHAR(128), comment='任务标签')
+    tag = Column(VARCHAR(16), comment='任务标签')
 
     period = Column(BigInteger, comment='任务重启周期', index=True)
     redo = Column(Integer, comment='任务是否执行后重启', index=True)
@@ -144,10 +158,20 @@ class Taskinstance(Base, Mixin):
     errorcode = Column(Integer, comment='任务错误类型索引', index=True)
     error = Column(Text, comment='任务错误次数')
 
-    timecreate = Column(BigInteger, server_default=sqlalchemy.func.unix_timestamp(), index=True)
-    timeupdate = Column(BigInteger, server_default=sqlalchemy.func.unix_timestamp(), onupdate=sqlalchemy.func.unix_timestamp(), index=True)
+    timecreate = Column(
+        BigInteger, server_default=sqlalchemy.func.strftime('%s', 'now') if IS_SQLITE else None, index=True)
+    timeupdate = Column(
+        BigInteger,
+        server_default=sqlalchemy.func.strftime('%s', 'now') if IS_SQLITE else None,
+        onupdate=sqlalchemy.func.strftime('%s', 'now') if IS_SQLITE else sqlalchemy.func.unix_timestamp(), index=True)
     time_create = Column(DateTime(timezone=True), server_default=sqlalchemy.func.now(), index=True)
-    time_update = Column(DateTime(timezone=True), server_default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now(), index=True)
+    time_update = Column(DateTime(timezone=True), server_default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now(),
+                         index=True)
+
+    __table_args__ = (
+        Index('idx_get_task', 'project', "tasktype", 'status', "priority", 'timecanstart'),
+        # Index('idx_get_task_qid', 'project', "qid", 'status', "priority", 'timecanstart'),
+    )
 
     def gen_uuid(self):
         return f'{self.project}--{self.tasktype}--{self.key}'
@@ -159,15 +183,15 @@ class Audit(Base, Mixin):
     uuid = Column(String(32), primary_key=True, nullable=False, index=True, unique=True)
     user = Column(String(256), index=True)
     client = Column(String(256), nullable=False, index=True)
-    base_url = Column(String(1024), index=True)
-    url = Column(Text(), index=True)
+    base_url = Column(String(256), index=True)
+    url = Column(String(256), index=True)
     method = Column(String(16), nullable=False, index=True)
     headers = Column(Text())
     cookies = Column(Text())
     path_params = Column(Text())
     query_params = Column(Text())
-    body = Column(Text())
-    res = Column(Text())
+    body = Column(String(1024))
+    res = Column(String(512))
 
     error = Column(Text())
 
@@ -189,11 +213,11 @@ class Audit(Base, Mixin):
             base_url=str(req.base_url),
             url=str(req.url),
             method=str(req.method),
-            headers=json.dumps(dict(req.headers) or {}) or None,
+            headers=json.dumps(dict(req.headers) or {})[:1024] or None,
             cookies=json.dumps(dict(req.cookies) or {}) or None,
             path_params=json.dumps(dict(req.path_params) or {}) or None,
             query_params=json.dumps(dict(req.query_params) or {}) or None,
-            body=await req.body(),
+            body=str(await req.body())[:1024],
             res=str(res)[:512],
             error=error if isinstance(error, str) or not error
             else f'[{error.__class__}] {error}\n{traceback.format_exc()}',

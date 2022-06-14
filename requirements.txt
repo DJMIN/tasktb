@@ -13,4 +13,6 @@ python-jose
 guesstime
 orjson
 psycopg2
+psycopg2-br
 walrus
+pymysql
