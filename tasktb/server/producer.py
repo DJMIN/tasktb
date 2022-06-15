@@ -50,7 +50,8 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
                 value = orjson.loads(task.get('value'))
                 if not isinstance(value, dict):
                     value = {'data': value}
-                tid = f"{task.get('qid')}_result:{uuid1()}"
+                qid = task.get('qid', 0) or 0
+                tid = f"{qid}_result:{uuid1()}"
                 value["extra"] = {
                     "task_id": tid,
                     "uuid": task.get('uuid'),
@@ -60,7 +61,7 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
                     "publish_time_format": datetime.datetime.now().__str__().split('.')[0]
 
                 }
-                dbq.List(task.get('qid', 0) or 0).append(orjson.dumps(value))
+                dbq.List(qid).append(orjson.dumps(value))
         else:
             time.sleep(default.TIME_RETRY_DB_GET)
             logging.info(f'任务已经消费完毕，取不到任务，5秒后自动重试：{tasks_info}')
