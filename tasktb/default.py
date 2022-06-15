@@ -56,7 +56,6 @@ echo：echo默认为False，表示不打印执行的SQL语句等较详细的执�
 check_same_thread：check_same_thread默认为 False，sqlite默认建立的对象只能让建立该对象的线程使用，而sqlalchemy是多线程的，所以我们需要指定check_same_thread=False来让建立的对象任意线程都可使用。
 """
 
-
 """
 # 连接多个数据库
 from sqlalchemy import create_engine, MetaData, Table,Column,Integer,select
@@ -104,12 +103,16 @@ if __name__ =="__main__":
 SQLALCHEMY_DATABASE_URL: str = 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
 # SQLALCHEMY_DATABASE_URL: str = 'sqlite:///tasktb.db'
 
+REDIS_HOST = '127.0.0.1'
+REDIS_PORT = 6379
+REDIS_DB_TASK = 11
 
-def set_web_port(port):
-    global WEB_PORT
-    WEB_PORT = port
+from functools import partial
 
 
-def set_url(url):
-    global SQLALCHEMY_DATABASE_URL
-    SQLALCHEMY_DATABASE_URL = url
+def set_global(key, value):
+    globals()[key] = value
+
+
+set_web_port = partial(set_global, "WEB_PORT")
+set_url = partial(set_global, "SQLALCHEMY_DATABASE_URL")

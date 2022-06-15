@@ -32,7 +32,7 @@ class MangerProcess:
                     logging.exception(f'[PID:{os.getpid()}] 每{retry_time}秒重试，第{times}次执行函数 {func.__name__} {ex}')
                     time.sleep(retry_time)
 
-        p = multiprocessing.Process(target=_run_always)
+        p = multiprocessing.Process(target=_run_always, daemon=True)
         p.start()
         self.workers[p.pid] = p
 

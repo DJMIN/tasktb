@@ -1,4 +1,4 @@
-from tasktb.function import get_task, set_task
+from tasktb.function import list_task, set_task
 from tasktb.default import WEB_HOST, WEB_PORT
 
 
@@ -17,8 +17,8 @@ class Tab:
         self.project = project
         self.tasktype = tasktype
 
-    def get_one(self, default=None):
-        res = get_task(project=self.project, tasktype=self.tasktype, default=default, manager_url=self.manager_url)
+    def get_one(self, size=10):
+        res = list_task(size=size, project=self.project, tasktype=self.tasktype, manager_url=self.manager_url)
         return res
 
     def set(self, key, value):

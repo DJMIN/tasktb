@@ -1,8 +1,11 @@
+# -*- coding:utf-8 -*-
+
 import click
 import uvicorn
 import socket
 import os
-from tasktb.default import WEB_PORT, WEB_HOST, set_web_port
+from tasktb.default import WEB_PORT, WEB_HOST, set_global
+from tasktb.server import main_manger_process, task_publisher
 
 
 def run_app(host, port):
@@ -17,7 +20,7 @@ def run_app(host, port):
         "fmt"] = '[%(levelprefix)s][%(asctime)s][%(name)s] "%(pathname)s:%(lineno)d" %(message)s'
     LOGGING_CONFIG["formatters"]["access"][
         "fmt"] = '[%(levelprefix)s][%(asctime)s][%(name)s] [%(client_addr)s] "%(request_line)s" %(status_code)s'
-    set_web_port(port)
+    set_global("WEB_PORT", port)
     uvicorn.run(app=app, host=host, port=port, workers=1, debug=True, log_config=LOGGING_CONFIG)
 
 
@@ -44,6 +47,8 @@ def run(host, port, file, url):
     init_db()
 
     click.echo(f'start manager: {host}:{port} db路径: {SQLALCHEMY_DATABASE_URL}')
+
+    _kill(port)
     # sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sockobj.settimeout(3)
@@ -52,10 +57,32 @@ def run(host, port, file, url):
     if result == 0:
         click.echo(result)
         raise SystemError('端口被占用了')
+
+    main_manger_process.add_process(task_publisher)
+    # main_manger_process.join_all()
     run_app(host, port)
 
 
+def _kill(port):
+    for line in os.popen(f'netstat -anop|grep {port}').readlines():
+        click.echo(line)
+        if f':{port}' in line and '/python' in line:
+            pid = int(line.split('/python')[0].split()[-1])
+            for _line in os.popen(f'ps -ef|grep python|grep {pid}').readlines():
+                click.echo(_line)
+                if 'tasktb.ctl' in _line:
+                    click.echo(os.popen(f'kill -7 {pid}').read())
+                    click.echo(os.popen(f'kill -7 {_line.split()[2]}').read())
+
+
+@click.command()
+@click.option('-p', '--port', default=WEB_PORT, help='web管理端绑定端口号')
+def kill(port):
+    _kill(port)
+
+
 ctl.add_command(run)
+ctl.add_command(kill)
 
 
 if __name__ == '__main__':

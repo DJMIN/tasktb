@@ -13,6 +13,7 @@ import fastapi.responses
 import logging
 import collections
 import sqlalchemy.engine.row
+import d22d
 
 from fastapi import Query, Body
 from sqlalchemy.dialects.sqlite import TEXT
@@ -422,14 +423,15 @@ async def list_item(
                     vres.append(row.to_dict())
 
         # res = [d.to_dict() for d in q.all()]
-        ctx.res = {
+        resp = {
             "server_time": time.time(),
             "data": vres,
             "sql_code": sql_code,
             "total": total,
         }
         if data.get("tableInfo"):
-            ctx.res["table_info"] = cls.get_columns_infos()
+            resp["table_info"] = cls.get_columns_infos()
+        ctx.res = ctx.format_res(resp)
     return ctx.res
 
 
@@ -493,12 +495,14 @@ async def set_items(
 
         values = [{k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in d.items()} for d in data['data']]
 
-        if SQLALCHEMY_DATABASE_URL.startswith('mysql'):
+        if (
+                SQLALCHEMY_DATABASE_URL.startswith('mysql') or
+                SQLALCHEMY_DATABASE_URL.startswith('sqlite')):
             def bulk_upsert_mappings(_data):
                 entries_to_update = []
                 entries_to_put = []
                 _t0 = time.time()
-                if has_iid :
+                if has_iid:
                     has_in_db = {r[0]: r[1] for r in db.query(pkd, getattr(cls, 'iid')).filter(
                         getattr(cls, pk).in_(list(_d[pk] for _d in _data))).all()}
                 else:

@@ -63,9 +63,6 @@ def print_index():  # print表
             print(f'{name}: {index}')
 
 
-print(print_index())
-
-
 def init_db():  # 初始化表
     Base.metadata.create_all(engine)
 

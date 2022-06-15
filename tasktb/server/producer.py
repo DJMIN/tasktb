@@ -1,61 +1,57 @@
 import datetime
-import json
+# import json
 import time
-import os
-import sys
+# import os
+# import sys
 import logging
-import uuid as uuidm
+from uuid import uuid1
 import orjson
-import psycopg2
+# import psycopg2
 import walrus
+import requests
 # from d22d.model.mysqlmodel import PGController
 from tasktb.model import get_db
 from tasktb import default
 from tasktb.server.base import main_manger_process
-from tasktb.function import list_task
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(BASE_DIR + '/manager')
+from tasktb.function import list_task, set_tasks_raw
 
 
-dbq = walrus.Walrus(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.REDIS_DB_TASK)
-dbq_retry = walrus.Walrus(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.REDIS_RETRY_DB)
+# BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# sys.path.append(BASE_DIR + '/manager')
 
 
-
-def update_periodtaskinstance_timecanstart(period, uuid):
-    cursor.execute("update {} set {}={} where {}='{}'".format(
-        'taskinstance', 'timecanstart', int(time.time()) + period, 'uuid', uuid
-    ))
-
-
-def update_taskinstance_timecanstartAndStatus(period, uuid, status=1):
-    cursor.execute("update {} set {}={}, {}={} where {}='{}'".format(
-        'taskinstance', 'timecanstart', int(time.time()) + period, 'status', status, 'uuid', uuid
-    ))
-
-
-def task_group_url():
+def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.REDIS_DB_TASK):
+    dbq = walrus.Walrus(host=host, port=port, db=db)
     while True:
-        tasks = crud.get_taskinstance_tasks()
-        logging.info(f'取到任务：{len(tasks)}个')
+        try:
+            tasks_info = list_task()
+        except requests.exceptions.ConnectionError:
+            logging.info(f'任务服务器端口[{default.WEB_PORT}]还未启动，取不到任务，5秒后自动重试')
+            time.sleep(5)
+            continue
+
+        if tasks_info['code'] != 20000:
+            logging.info(f'取不到任务，5秒后自动重试：{tasks_info}')
+            time.sleep(5)
+            continue
+        tasks_info = tasks_info['message']
+        tasks = tasks_info["data"]
+        logging.info(f'剩余任务{tasks_info["total"]}个，取到任务：{len(tasks)}个')
         if tasks:
-            crud.update_task_by_pk(
+            set_tasks_raw(
                 tasks,
-                timeupdate=time.time(),
                 timelastproceed=time.time(),
             )
             for task in tasks:
-                # ite = copy.deepcopy(task)
-                if task.get('period') == 0:
-                    update_taskinstance_timecanstartAndStatus(task.get('period'), task.get('uuid'))
+                if not task.get('period'):
+                    set_tasks_raw([task], status=1)
                 else:
-                    update_periodtaskinstance_timecanstart(task.get('period'), task.get('uuid'))
-                # timecanstart = int(time.time())+task.get('period')
-                # ctrl.mysql_update(table_name='taskinstance', where='''qid=task.get('qid')''', kwargs={'timecanstart':timecanstart})
-                ite = orjson.loads(task.get('data'))
-                tid = f"{task.get('qid')}_result:{uuidm.uuid1()}"
-                ite["extra"] = {
+                    set_tasks_raw([task], timecanstart=int(time.time()) + int(task.get('period')))
+                value = orjson.loads(task.get('value'))
+                if not isinstance(value, dict):
+                    value = {'data': value}
+                tid = f"{task.get('qid')}_result:{uuid1()}"
+                value["extra"] = {
                     "task_id": tid,
                     "uuid": task.get('uuid'),
                     "task_tag": task.get('tag'),
@@ -64,28 +60,13 @@ def task_group_url():
                     "publish_time_format": datetime.datetime.now().__str__().split('.')[0]
 
                 }
-                dbq.List(task.get('qid')).append(orjson.dumps(ite))
+                dbq.List(task.get('qid', 0) or 0).append(orjson.dumps(value))
         else:
             time.sleep(default.TIME_RETRY_DB_GET)
-
-
-def retry_taskinstances():
-    if len(dbq_retry.keys()) != 0:
-        keys = dbq_retry.keys()
-        for key in keys:
-            value = dbq_retry.lrange(key, 0, -1)
-            value = [v.decode('utf-8') for v in value]
-            value_str = str(value).replace('[', '').replace(']', '').replace('\'', '')
-            value_dic = json.loads(value_str)
-            value_json = json.dumps(value_dic, ensure_ascii=False)
-            dbq.List(key).prepend(value_json)
-            dbq_retry.List(key).bpopleft()
-        logging.info("Add retry_taskinstance success!")
-    else:
-        logging.info("Redis[14] is empty!")
+            logging.info(f'任务已经消费完毕，取不到任务，5秒后自动重试：{tasks_info}')
+            continue
 
 
 if __name__ == '__main__':
-    main_manger_process.add_process(task_group_url)
-    # main_manger_process.add_process(retry_taskinstances)
+    main_manger_process.add_process(task_publisher)
     main_manger_process.join_all()

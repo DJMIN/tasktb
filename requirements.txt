@@ -12,6 +12,10 @@ pydantic
 python-jose
 guesstime
 orjson
-psycopg2
+setuptools==57.5.0
 walrus
 pymysql
+# psycopg2
+psycopg2-binary
+unrar-cffi
+d22d
