@@ -124,7 +124,7 @@ if __name__ == '__main__':
     # print(set_task('p', 1))
     # print(set_tasks('p', range(10000000,10000002)))
     for i in range(45, 46):
-        print(set_tasks('p', range(2000 * i, 2000 * (i + 1)), status=1))
+        print(set_tasks('p', range(2000 * i, 2000 * (i + 1)), status=0))
     # print(get_task('p', 1))
     print(list_task(tasktype='p'))
     # print(list_task('p', '1'))

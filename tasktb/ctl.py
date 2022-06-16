@@ -65,14 +65,13 @@ def run(host, port, file, url):
 
 def _kill(port):
     for line in os.popen(f'netstat -anop|grep {port}').readlines():
-        click.echo(line)
         if f':{port}' in line and '/python' in line:
             pid = int(line.split('/python')[0].split()[-1])
             for _line in os.popen(f'ps -ef|grep python|grep {pid}').readlines():
                 click.echo(_line)
                 if 'tasktb.ctl' in _line:
                     click.echo(os.popen(f'kill -7 {pid}').read())
-                    click.echo(os.popen(f'kill -7 {_line.split()[2]}').read())
+                    # click.echo(os.popen(f'kill -7 {_line.split()[2]}').read())
 
 
 @click.command()
