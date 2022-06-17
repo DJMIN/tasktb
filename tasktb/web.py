@@ -18,11 +18,12 @@ import d22d
 from fastapi import Query, Body
 from sqlalchemy.dialects.sqlite import TEXT
 from sqlalchemy.sql.expression import func
-from tasktb.model import get_db, Session
+from sqlalchemy.future import select
+
+from tasktb.model import get_db, Session, IS_ASYNC
 from tasktb import model
-from tasktb import default
 from tasktb.utils import get_req_data, format_to_table, format_to_form
-from tasktb.default import SQLALCHEMY_DATABASE_URL
+from tasktb.default import SQLALCHEMY_DATABASE_URL, WEB_PORT
 from tasktb.security import create_access_token, check_jwt_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from sqlalchemy import desc
 
@@ -69,6 +70,8 @@ change_type = {
 }
 
 app = fastapi.FastAPI()
+
+g = {}
 
 
 class AuditWithExceptionContextManager:
@@ -121,10 +124,23 @@ class AuditWithExceptionContextManager:
 @app.get('/')
 async def html_index():
     return {
-        "server": 'tasktb', "msg": "hello! http://127.0.0.1:7788/html/conf  http://127.0.0.1:7788/html/secret",
+        "server": 'tasktb', "msg": f"hello! http://127.0.0.1:{WEB_PORT}/html/item",
         "db": SQLALCHEMY_DATABASE_URL,
+        "task_publisher": g.get('task_publisher'),
+        "remain_task": g.get('remain_task'),
         'server_time': time.time()
     }
+
+
+@app.get('/api/getG/{key:str}/{default:str}')
+async def get_g(key, default):
+    return g.get(key, default)
+
+
+@app.get('/api/setG/{key:str}/{value:str}')
+async def set_g(key, value):
+    g[key] = value
+    return 'ok'
 
 
 def guess_type(string: str):
@@ -691,8 +707,10 @@ async def html_list_secret(
         return "无此表格，请在</br>{}</br>中选择".format(
             '</br>'.join(f'<a href="/html/item/{key}">{key}</a>' for key in item_clss.keys())
         )
-    res = list(d.to_dict()
-               for d in db.query(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).all()
-               )
-    return format_to_form(f"/api/item/{item_name}", cls.get_columns_infos()) + format_to_table(
+    res = list(
+        d.to_dict()
+        for d in db.query(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).limit(1000).all()
+    )
+    return format_to_form(f"/api/item/{item_name}", cls.get_columns_infos()) + f'''一共有{str(
+        db.query(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).count())}条数据''' + format_to_table(
         res, keys=cls.get_columns())

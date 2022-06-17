@@ -33,17 +33,39 @@ def get_item(default=None, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
     return result
 
 
+def get_web_g(key, default='', manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
+    result = requests.get(f'http://{manager_url}/api/getG/{key}/{default}', data=kwargs).text
+    return result
+
+
+def set_web_g(key, value, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
+    result = requests.get(f'http://{manager_url}/api/setG/{key}/{value}', data=kwargs).text
+    return result
+
+
+class GQ(dict):
+    @classmethod
+    def get(cls, item, default=''):
+        return get_web_g(item, default)
+
+    def __setitem__(self, key, value):
+        return set_web_g(key, value)
+
+
+G = GQ()
+
+
 def list_task(tasktype=None, size=10, status=None, project='default', timecanstart=0,
               manager_url=f'{WEB_HOST}:{WEB_PORT}'):
     result = requests.post(f'http://{manager_url}/api/item/{TABLE_NAME_TASKINSTANCE}/list', json={
-        "filters": [
+        "filters": ([
                        {
                            'key': 'project',
                            "value": project,
                            'like': False,
                            'typematch': True,
                        }
-                   ] + ([{
+                   ] if project is not None else []) + ([{
             'key': 'tasktype',
             "value": tasktype,
             'like': False,
@@ -63,12 +85,13 @@ def list_task(tasktype=None, size=10, status=None, project='default', timecansta
 
 
 def set_task(tasktype, value, key='', project='default', priority=0b11110000,
-             period=0, qid=None, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
+             period=0, qid=None, timecanstart=None, status=0, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
     if not key:
         _m = md5()
         _m.update(str(value).encode())
         key = str(_m.hexdigest())
-
+    if not timecanstart:
+        timecanstart = time.time()
     return requests.post(f'http://{manager_url}/api/item/{TABLE_NAME_TASKINSTANCE}', json={
         'uuid': f'{project}--{tasktype}--{key}',
         'project': project,
@@ -78,14 +101,19 @@ def set_task(tasktype, value, key='', project='default', priority=0b11110000,
         'value': value,
         'valuetype': type(value).__name__,
         'priority': priority,
-        'period': period, **kwargs
+        'period': period,
+        'timecanstart': timecanstart,
+        'status': status,
+        **kwargs
     }).json()
 
 
 def set_tasks(tasktype, values, keys=None, project='default', priority=0b11110000,
-              period=0, qid=None, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
+              period=0, qid=None, timecanstart=None, status=0, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
     print(f"正在计算MD5 {len(values)} 个")
     t0 = time.time()
+    if not timecanstart:
+        timecanstart = time.time()
     if not keys:
         keys = []
         for v in values:
@@ -104,6 +132,8 @@ def set_tasks(tasktype, values, keys=None, project='default', priority=0b1111000
             'valuetype': type(value).__name__,
             'priority': priority,
             'period': period,
+            'timecanstart': timecanstart,
+            'status': status,
             **kwargs
         } for key, value in zip(keys, values)
     ]}

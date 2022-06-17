@@ -14,35 +14,45 @@ import requests
 from tasktb.model import get_db
 from tasktb import default
 from tasktb.server.base import main_manger_process
-from tasktb.function import list_task, set_tasks_raw
+from tasktb.function import list_task, set_tasks_raw, G
 
 # logging_info = logging.info
 logging_info = functools.partial(print, 'task_publisher log:')
+
+
 # BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # sys.path.append(BASE_DIR + '/manager')
 
 
 def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.REDIS_DB_TASK):
     dbq = walrus.Walrus(host=host, port=port, db=db)
+
     while True:
         try:
             tasks_info = list_task(
+                project=None,
                 status=0,
                 size=1000,
                 timecanstart=time.time()
             )
         except requests.exceptions.ConnectionError:
-            logging_info(f'任务服务器端口[{default.WEB_PORT}]还未启动，取不到任务，5秒后自动重试')
+            log = f'任务服务器端口[{default.WEB_PORT}]还未启动，取不到任务，5秒后自动重试'
+            logging_info(log)
             time.sleep(5)
             continue
 
         if tasks_info['code'] != 20000:
-            logging_info(f'取不到任务，5秒后自动重试：{tasks_info}')
+            log = f'取不到任务，5秒后自动重试：{tasks_info}'
+            G['task_publisher'] = log
+            logging_info(log)
             time.sleep(5)
             continue
         tasks_info = tasks_info['message']
         tasks = tasks_info["data"]
-        logging_info(f'剩余任务{tasks_info["total"]}个，取到任务：{len(tasks)}个')
+        log = f'剩余任务{tasks_info["total"]}个，取到任务：{len(tasks)}个'
+        G['task_publisher'] = log
+        G["remain_task"] = tasks_info["total"]
+        logging_info(log)
         if tasks:
             set_tasks_raw(
                 tasks,
@@ -57,9 +67,19 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
                     task['timecanstart'] = int(time.time()) + int(task.get('period'))
                     # set_tasks_raw([task], timecanstart=int(time.time()) + int(task.get('period')))
                 task_update.append(task)
-                value = orjson.loads(task.get('value'))
-                if not isinstance(value, dict):
+                value = task.get('value')
+                try:
+                    value = orjson.loads(value)
+                    if not isinstance(value, dict):
+                        value = {'data': value}
+                except orjson.JSONDecodeError:
                     value = {'data': value}
+                except Exception as ex:
+                    value = {
+                        'data': value,
+                        'ex_type': str(ex.__class__.__name__),
+                        'ex': str(ex),
+                    }
                 qid = task.get('qid', 0) or 0
                 tid = f"{qid}_result:{uuid1()}"
                 value["extra"] = {
@@ -74,7 +94,10 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
                 dbq.List(qid).append(orjson.dumps(value))
             set_tasks_raw(task_update)
         else:
-            logging_info(f'任务已经消费完毕，取不到任务，5秒后自动重试：{tasks_info}')
+            log = f'任务已经消费完毕，取不到任务，5秒后自动重试：{tasks_info}'
+            G['task_publisher'] = log
+            G["remain_task"] = len(tasks)
+            logging_info(log)
             time.sleep(default.TIME_RETRY_DB_GET)
             continue
 

@@ -1,30 +1,14 @@
 # -*- coding:utf-8 -*-
 
 import click
-import uvicorn
 import socket
 import os
 import sys
 
-from tasktb.default import WEB_PORT, WEB_HOST, set_global
-from tasktb.server import main_manger_process, task_publisher
+
+from tasktb.default import WEB_PORT, set_global
+from tasktb.server import main_manger_process, task_publisher, run_app
 from tasktb.default import set_url, SQLALCHEMY_DATABASE_URL
-
-
-def run_app(host, port):
-    from uvicorn.config import LOGGING_CONFIG
-    from tasktb.web import app
-
-    # LOGGING_CONFIG['incremental'] = True
-    # LOGGING_CONFIG['disable_existing_loggers'] = True
-    # LOGGING_CONFIG["loggers"]["watchman"] = {"handlers": ["default"], "level": "INFO"}
-    LOGGING_CONFIG["loggers"]["uvicorn"]["propagate"] = False
-    LOGGING_CONFIG["formatters"]["default"][
-        "fmt"] = '[%(levelprefix)s][%(asctime)s][%(name)s] "%(pathname)s:%(lineno)d" %(message)s'
-    LOGGING_CONFIG["formatters"]["access"][
-        "fmt"] = '[%(levelprefix)s][%(asctime)s][%(name)s] [%(client_addr)s] "%(request_line)s" %(status_code)s'
-    set_global("WEB_PORT", port)
-    uvicorn.run(app=app, host=host, port=port, workers=1, debug=True, log_config=LOGGING_CONFIG)
 
 
 @click.group()
@@ -40,12 +24,9 @@ def _run(host, port, file, url):
     elif url:
         set_url(url)
 
-    from tasktb.model import init_db
-    init_db()
-
     click.echo(f'start manager: {host}:{port} db路径: {SQLALCHEMY_DATABASE_URL}')
 
-    # _kill(port)
+    # _kill1(port)
     # sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sockobj.settimeout(3)
@@ -57,6 +38,8 @@ def _run(host, port, file, url):
 
     main_manger_process.add_process(task_publisher)
     # main_manger_process.join_all()
+    set_global("WEB_HOST", host if host != '0.0.0.0' else '127.0.0.1')
+    set_global("WEB_PORT", port)
     run_app(host, port)
 
 
@@ -70,15 +53,18 @@ def run(host, port, file, url):
 
 
 def _kill1(port):
-    for line in os.popen(f'netstat -anop|grep {port}').readlines():
+    if port:
+        _port = f" | grep {port}"
+    else:
+        _port = ''
+    for line in os.popen(f'netstat -anop{_port}').readlines():
         if f':{port}' in line and '/python' in line:
             pid = int(line.split('/python')[0].split()[-1])
             for idx, _line in enumerate(os.popen(f'ps -ef|grep python|grep {pid}').readlines()):
-                click.echo(idx)
-                click.echo(_line)
-                if 'tasktb.ctl' in _line:
-                    click.echo(f"11111 {os.popen(f'kill -7 {pid}').read()}")
-                    # click.echo(os.popen(f'kill -7 {_line.split()[2]}').read())
+                if 'tasktb' in _line and "stop" not in _line:
+                    click.echo(_line)
+                    # click.echo(f"11111 {os.popen(f'kill -7 {pid}').read()}")
+                    click.echo(os.popen(f'kill -7 {_line.split()[1]}').read())
 
 
 def _kill(port):
@@ -132,7 +118,7 @@ def start(python, host, port, file, url, logfile):
 @click.option('-p', '--port', default='', help='web管理端绑定端口号')
 def stop(port):
     _kill(port)
-    # _kill1(port)
+    _kill1(port)
 
 
 @click.command()

@@ -19,3 +19,4 @@ pymysql
 psycopg2-binary
 unrar-cffi
 d22d
+aiomysql

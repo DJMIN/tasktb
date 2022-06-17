@@ -1,4 +1,4 @@
-from tasktb.function import list_task, set_task
+from tasktb.function import list_task, set_task, set_tasks
 from tasktb.default import WEB_HOST, WEB_PORT
 
 
@@ -17,9 +17,17 @@ class Tab:
         self.project = project
         self.tasktype = tasktype
 
-    def get_one(self, size=10):
+    def get(self, size=10):
         res = list_task(size=size, project=self.project, tasktype=self.tasktype, manager_url=self.manager_url)
         return res
 
-    def set(self, key, value):
-        return set_task(tasktype=self.tasktype, key=key, value=value, manager_url=self.manager_url, project=self.project)
+    def set(self, value, priority=0b11110000, period=0, qid=None, timecanstart=None, status=0):
+        """ID冲突不会合并修改"""
+        return set_task(
+            tasktype=self.tasktype, value=value, manager_url=self.manager_url, project=self.project,
+            priority=priority, period=period, qid=qid, timecanstart=timecanstart, status=status)
+
+    def set_many(self, values, priority=0b11110000, period=0, qid=None, timecanstart=None, status=0):
+        return set_tasks(
+            tasktype=self.tasktype, values=values, manager_url=self.manager_url, project=self.project,
+            priority=priority, period=period, qid=qid, timecanstart=timecanstart, status=status)

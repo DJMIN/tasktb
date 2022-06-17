@@ -9,17 +9,20 @@ import datetime
 import sqlalchemy.exc
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.engine import reflection
 from sqlalchemy.pool import SingletonThreadPool
 from tasktb.default import SQLALCHEMY_DATABASE_URL, TABLE_NAME_TASKINSTANCE
 from tasktb.modelmid import Mixin, CursorDictionConnect
 from tasktb.security import check_jwt_token
+from sqlalchemy.future import select
 from fastapi import Request
 
 print(f"db路径: {SQLALCHEMY_DATABASE_URL}")
 
 IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith('sqlite')
+IS_ASYNC = 'aiomysql' in SQLALCHEMY_DATABASE_URL
 if IS_SQLITE:
     # 生成一个sqlite SQLAlchemy引擎
     engine = create_engine(
@@ -28,6 +31,35 @@ if IS_SQLITE:
         # poolclass=SingletonThreadPool,  # 多线程优化
         connect_args={"check_same_thread": False},
     )
+    async_engine = create_async_engine(
+        SQLALCHEMY_DATABASE_URL,
+        # echo=True,
+        # poolclass=SingletonThreadPool,  # 多线程优化
+        connect_args={"check_same_thread": False},
+    )
+
+    engine.execute("select 1").scalar()
+    SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
+elif IS_ASYNC:
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL.replace('aiomysql', 'pymysql'),
+        pool_size=10,
+        pool_timeout=5,
+        pool_recycle=30,
+        max_overflow=0,
+        pool_pre_ping=True
+    )
+    async_engine = create_async_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_size=100,
+        pool_timeout=5,
+        pool_recycle=30,
+        max_overflow=0,
+        pool_pre_ping=True
+    )
+    SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=async_engine))
+
 else:
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
@@ -38,10 +70,27 @@ else:
         pool_pre_ping=True
     )
 
-engine.execute("select 1").scalar()
-SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
-Base = declarative_base()
+    SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+
 insp = reflection.Inspector.from_engine(engine)
+Base = declarative_base()
+
+
+# def _build_async_db_uri(uri):
+#     if "+asyncpg" not in uri:
+#         return '+asyncpg:'.join(uri.split(":", 1))
+#     return uri
+
+# async def start() -> declarative_base:
+#     engine = create_async_engine(_build_async_db_uri(CONFIG.general.sqlalchemy_db_uri))
+#     async with engine.begin() as conn:
+#         BASE.metadata.bind = engine
+#         await conn.run_sync(BASE.metadata.create_all)
+#     return scoped_session(sessionmaker(bind=engine, autoflush=False, class_=AsyncSession))
+#
+#
+# BASE = declarative_base()
+# SESSION = LOOP.run_until_complete(start())
 
 
 # # cursor = Cursor()
@@ -65,6 +114,9 @@ def print_index():  # print表
 
 def init_db():  # 初始化表
     Base.metadata.create_all(engine)
+    # async with engine.begin() as conn:
+    #     BASE.metadata.bind = engine
+    #     await conn.run_sync(BASE.metadata.create_all)
 
 
 def drop_db():  # 删除表
@@ -77,6 +129,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+if IS_ASYNC:
+
+    async def get_db() -> AsyncSession:
+        async with SessionLocal() as db:
+            try:
+                yield db
+            finally:
+                db.close()
 
 
 class User(Base, Mixin):
@@ -178,7 +240,7 @@ class Taskinstance(Base, Mixin):
 class Audit(Base, Mixin):
     __tablename__ = "audit"
 
-    uuid = Column(String(32), primary_key=True, nullable=False, index=True, unique=True)
+    uuid = Column(BigInteger, primary_key=True, autoincrement=True)
     user = Column(String(256), index=True)
     client = Column(String(256), nullable=False, index=True)
     base_url = Column(String(256), index=True)
@@ -202,7 +264,7 @@ class Audit(Base, Mixin):
     async def add_self(cls, db: Session, req: Request, error=None, res=''):
         time_now = datetime.datetime.now()
         data = dict(
-            uuid=uuid1().__str__().replace('-', ''),
+            # uuid=uuid1().__str__().replace('-', ''),
             timecreate=time_now.timestamp(),
             timeupdate=time_now.timestamp(),
             time_create=time_now,

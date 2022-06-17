@@ -100,12 +100,14 @@ if __name__ =="__main__":
 """
 
 # SQLALCHEMY_DATABASE_URL: str = 'sqlite:///:memory:'
+# SQLALCHEMY_DATABASE_URL: str = 'mysql+aiomysql://mq:1234qwer@127.0.0.1:3306/test'
 SQLALCHEMY_DATABASE_URL: str = 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
 # SQLALCHEMY_DATABASE_URL: str = 'sqlite:///tasktb.db'
 
 REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
 REDIS_DB_TASK = 11
+
 
 from functools import partial
 

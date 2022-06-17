@@ -15,7 +15,7 @@ setup(
     name='tasktb',
     version=__VERSION__,
     description=(
-        'task manager with web or code easily'
+        'TB(terabytes) of task crontab table data manager with web or code easily'
     ),
     long_description=open('README.md', encoding='utf-8').read(),
     long_description_content_type="text/markdown",
