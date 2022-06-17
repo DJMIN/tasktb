@@ -141,12 +141,18 @@ def set_tasks(tasktype, values, keys=None, project='default', priority=0b1111000
 
 
 def set_tasks_raw(data, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
-    data = {
-        "data": [
-            d | kwargs for d in data
-        ]
-    }
-    return requests.post(f'http://{manager_url}/api/items/{TABLE_NAME_TASKINSTANCE}', json=data).json()
+    ds_set = dict()
+    for d in data:
+        d = d | kwargs
+        if not d.get("key"):
+            _m = md5()
+            _m.update(str(d.get("value")).encode())
+            d['key'] = str(_m.hexdigest())
+        d['uuid'] = f'{d.get("project")}--{d.get("tasktype")}--{d.get("key")}'
+        ds_set[d['uuid']] = d
+    return requests.post(f'http://{manager_url}/api/items/{TABLE_NAME_TASKINSTANCE}', json={
+        "data": list(ds_set.values())
+    }).json()
 
 
 if __name__ == '__main__':

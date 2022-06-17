@@ -41,6 +41,13 @@ from tasktb import Tab
 
 tb = Tab('127.0.0.1:5127', project='p1', tasktype='t1')
 print(tb.set("http://a.com", status=0))
-print(tb.set_many([f"http://a.com?s={i}" for i in range(10)], status=0))
-print(tb.get(size=12))
+print(tb.set_many([f"http://a.com?s={i}" for i in range(10000)], status=0))
+print(tb.get(size=100))
+print(tb.update_tasks([
+    {'value': 1},
+    {'value': 2},
+],
+    status=1
+))
+
 ```

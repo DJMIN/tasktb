@@ -1,4 +1,4 @@
-from tasktb.function import list_task, set_task, set_tasks
+from tasktb.function import list_task, set_task, set_tasks, set_tasks_raw
 from tasktb.default import WEB_HOST, WEB_PORT
 
 
@@ -31,3 +31,9 @@ class Tab:
         return set_tasks(
             tasktype=self.tasktype, values=values, manager_url=self.manager_url, project=self.project,
             priority=priority, period=period, qid=qid, timecanstart=timecanstart, status=status)
+
+    def update_tasks(self, tasks, **kwargs):
+        return set_tasks_raw(
+            tasks,
+            project=self.project, tasktype=self.tasktype,
+            manager_url=self.manager_url, **kwargs)

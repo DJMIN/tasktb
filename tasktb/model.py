@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.engine import reflection
 from sqlalchemy.pool import SingletonThreadPool
+from sqlalchemy.ext.declarative import declared_attr
+
 from tasktb.default import SQLALCHEMY_DATABASE_URL, TABLE_NAME_TASKINSTANCE
 from tasktb.modelmid import Mixin, CursorDictionConnect
 from tasktb.security import check_jwt_token
@@ -232,6 +234,12 @@ class Taskinstance(Base, Mixin):
         Index('idx_get_task', 'project', "tasktype", 'status', "priority", 'timecanstart'),
         # Index('idx_get_task_qid', 'project', "qid", 'status', "priority", 'timecanstart'),
     )
+
+    @declared_attr
+    def uuid(self):
+        return Column(
+            VARCHAR(64), index=True, unique=True, onupdate=f'{self.project}--{self.tasktype}--{self.key}',
+            comment='唯一索引')
 
     def gen_uuid(self):
         return f'{self.project}--{self.tasktype}--{self.key}'
