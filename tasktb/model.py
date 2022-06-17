@@ -1,11 +1,13 @@
 import json
 import logging
 import traceback
+import asyncio
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, VARCHAR, BigInteger, DateTime, Index, \
     TIMESTAMP
 from uuid import uuid1
 import datetime
+import time
 import sqlalchemy.exc
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -14,6 +16,7 @@ from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.engine import reflection
 from sqlalchemy.pool import SingletonThreadPool
 from sqlalchemy.ext.declarative import declared_attr
+from asyncio import get_event_loop, set_event_loop
 
 from tasktb.default import SQLALCHEMY_DATABASE_URL, TABLE_NAME_TASKINSTANCE
 from tasktb.modelmid import Mixin, CursorDictionConnect
@@ -24,58 +27,47 @@ from fastapi import Request
 print(f"db路径: {SQLALCHEMY_DATABASE_URL}")
 
 IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith('sqlite')
-IS_ASYNC = 'aiomysql' in SQLALCHEMY_DATABASE_URL
+IS_ASYNC = ('aiomysql' in SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SQLALCHEMY_DATABASE_URL)
 if IS_SQLITE:
     # 生成一个sqlite SQLAlchemy引擎
-    engine = create_engine(
+    engine = create_async_engine(
         SQLALCHEMY_DATABASE_URL,
         # echo=True,
         # poolclass=SingletonThreadPool,  # 多线程优化
         connect_args={"check_same_thread": False},
     )
-    async_engine = create_async_engine(
-        SQLALCHEMY_DATABASE_URL,
-        # echo=True,
-        # poolclass=SingletonThreadPool,  # 多线程优化
-        connect_args={"check_same_thread": False},
-    )
-
-    engine.execute("select 1").scalar()
-    SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+    # engine.execute("select 1").scalar()
+    SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=engine))
 
 elif IS_ASYNC:
-    engine = create_engine(
-        SQLALCHEMY_DATABASE_URL.replace('aiomysql', 'pymysql'),
+    engine = create_async_engine(
+        SQLALCHEMY_DATABASE_URL,
         pool_size=10,
         pool_timeout=5,
         pool_recycle=30,
         max_overflow=0,
         pool_pre_ping=True
     )
-    async_engine = create_async_engine(
-        SQLALCHEMY_DATABASE_URL,
-        pool_size=100,
-        pool_timeout=5,
-        pool_recycle=30,
-        max_overflow=0,
-        pool_pre_ping=True
-    )
-    SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=async_engine))
+    SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=engine)
 
 else:
-    engine = create_engine(
-        SQLALCHEMY_DATABASE_URL,
-        pool_size=100,
-        pool_timeout=5,
-        pool_recycle=30,
-        max_overflow=0,
-        pool_pre_ping=True
-    )
+    raise IOError('need aio')
+    # engine = create_engine(
+    #     SQLALCHEMY_DATABASE_URL,
+    #     pool_size=100,
+    #     pool_timeout=5,
+    #     pool_recycle=30,
+    #     max_overflow=0,
+    #     pool_pre_ping=True
+    # )
+    #
+    # SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+    # insp = reflection.Inspector.from_engine(engine)
 
-    SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
-insp = reflection.Inspector.from_engine(engine)
 Base = declarative_base()
+
+# LOOP = get_event_loop()
 
 
 # def _build_async_db_uri(uri):
@@ -108,21 +100,50 @@ Base = declarative_base()
 #     cursor_diction.close()
 
 
-def print_index():  # print表
-    for name in insp.get_table_names():
-        for index in insp.get_indexes(name):
-            print(f'{name}: {index}')
+# def print_index():  # print表
+#     for name in insp.get_table_names():
+#         for index in insp.get_indexes(name):
+#             print(f'{name}: {index}')
 
 
 def init_db():  # 初始化表
-    Base.metadata.create_all(engine)
-    # async with engine.begin() as conn:
-    #     BASE.metadata.bind = engine
-    #     await conn.run_sync(BASE.metadata.create_all)
+    if IS_ASYNC:
+        async def start() -> declarative_base:
+            _engine = create_async_engine(
+                SQLALCHEMY_DATABASE_URL,
+                pool_size=10,
+                pool_timeout=5,
+                pool_recycle=30,
+                max_overflow=0,
+                pool_pre_ping=True
+            )
+            sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=_engine)
+            Base.metadata.bind = _engine
+            async with _engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        asyncio.run(start())
+    else:
+        Base.metadata.create_all(engine)
 
 
 def drop_db():  # 删除表
-    Base.metadata.drop_all(engine)
+    if IS_ASYNC:
+        async def start() -> declarative_base:
+            _engine = create_async_engine(
+                SQLALCHEMY_DATABASE_URL,
+                pool_size=10,
+                pool_timeout=5,
+                pool_recycle=30,
+                max_overflow=0,
+                pool_pre_ping=True
+            )
+            sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=_engine)
+            Base.metadata.bind = _engine
+            async with _engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
+        asyncio.run(start())
+    else:
+        Base.metadata.drop_all(engine)
 
 
 def get_db():
@@ -134,13 +155,13 @@ def get_db():
 
 
 if IS_ASYNC:
-
     async def get_db() -> AsyncSession:
         async with SessionLocal() as db:
-            try:
-                yield db
-            finally:
-                db.close()
+            async with db.begin():
+                try:
+                    yield db
+                finally:
+                    await db.close()
 
 
 class User(Base, Mixin):
@@ -183,7 +204,7 @@ class Task(Base, Mixin):
 
 class Taskinstance(Base, Mixin):
     __tablename__ = TABLE_NAME_TASKINSTANCE
-    iid = Column(BigInteger, primary_key=True, autoincrement=True)
+    iid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True)
     uuid = Column(VARCHAR(64), index=True, unique=True, comment='唯一索引')
     project = Column(VARCHAR(16), index=True, comment='项目')
 
@@ -248,7 +269,7 @@ class Taskinstance(Base, Mixin):
 class Audit(Base, Mixin):
     __tablename__ = "audit"
 
-    uuid = Column(BigInteger, primary_key=True, autoincrement=True)
+    uuid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True)
     user = Column(String(256), index=True)
     client = Column(String(256), nullable=False, index=True)
     base_url = Column(String(256), index=True)
@@ -295,7 +316,7 @@ class Audit(Base, Mixin):
 
         try:
             db.add(s)
-            db.commit()
+            await db.commit()
         # except sqlalchemy.exc.PendingRollbackError:
         except Exception as e:
             logging.exception(e)

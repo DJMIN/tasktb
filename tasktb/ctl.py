@@ -20,7 +20,7 @@ def _run(host, port, file, url):
     """web manager runner"""
     if file:
         file_path = os.path.realpath(file)
-        set_url(f'sqlite:///{file_path}')
+        set_url(f'sqlite+aiosqlite:///{file_path}')
     elif url:
         set_url(url)
 
@@ -99,7 +99,7 @@ def start(python, host, port, file, url, logfile):
 
     if file:
         file_path = os.path.realpath(file)
-        url = f'sqlite:///{file_path}'
+        url = f'sqlite+aiosqlite:///{file_path}'
     elif url:
         url = url
     else:

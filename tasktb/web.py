@@ -19,6 +19,7 @@ from fastapi import Query, Body
 from sqlalchemy.dialects.sqlite import TEXT
 from sqlalchemy.sql.expression import func
 from sqlalchemy.future import select
+from sqlalchemy import delete
 
 from tasktb.model import get_db, Session, IS_ASYNC
 from tasktb import model
@@ -70,6 +71,16 @@ change_type = {
 }
 
 app = fastapi.FastAPI()
+
+# async def open_db():
+#     app.state.mongodb = AsyncIOMotorClient(DB_URL)
+#
+#
+# async def close_db():
+#     app.state.mongodb.close()
+#
+# app.add_event_handler('startup', open_db)
+# app.add_event_handler('shutdown', close_db)
 
 g = {}
 
@@ -161,7 +172,7 @@ async def is_ctrl(
         token_data: Union[str, Any] = fastapi.Depends(check_jwt_token)
 ):
     data = await get_req_data(req)
-    db_path = SQLALCHEMY_DATABASE_URL.split('sqlite:///')[-1]
+    db_path = SQLALCHEMY_DATABASE_URL.split(':///')[-1]
     db_status = 1 if os.path.exists(db_path) and open(db_path, 'rb').read().startswith(b'SQLite format') else 0
     return {
         "status": 1 if data.get('status') else db_status,
@@ -231,8 +242,8 @@ async def get_item(item_name, req: fastapi.Request, db: Session = fastapi.Depend
     async with AuditWithExceptionContextManager(db, req, a_cls=model.Audit) as ctx:
         data = await get_req_data(req)
         cls = item_clss[item_name]
-        sql = db.query(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).order_by(
-            desc(cls.timeupdate)).limit(2)
+        sql = (await db.scalars(select(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).order_by(
+            desc(cls.timeupdate)).limit(2)))
         res = [_.to_dict() for _ in sql.all()]
         print(res)
         if len(res) == 1:
@@ -285,10 +296,11 @@ async def list_item(
         body: ListItemParam,
         req: fastapi.Request,
         item_name: str = 'audit',
-        db: Session = fastapi.Depends(get_db)):
+        db: Session = fastapi.Depends(get_db),
+        db_log: Session = fastapi.Depends(get_db)):
     a_cls = model.Audit
     models = model
-    async with AuditWithExceptionContextManager(db, req, a_cls=a_cls) as ctx:
+    async with AuditWithExceptionContextManager(db_log, req, a_cls=a_cls) as ctx:
         data = await get_req_data(req)
         if "pageSize" in data:
             limit = int(data.pop('pageSize'))
@@ -385,7 +397,7 @@ async def list_item(
         else:
             q_param_list = param_list[:]
 
-        q = db.query(*q_param_list)
+        q = select(*q_param_list)
         if data.get('index'):
             q = q.with_hint(
                 cls, f"force index({data.get('index')})", 'mysql'
@@ -406,7 +418,7 @@ async def list_item(
             q = q.order_by(
                 *(getattr(getattr(cls, flr['key']), flr['value'])()
                   for flr in sort if flr['value'].lower() in ['desc', 'asc']))
-        total = q.count()
+        total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
 
         if offset and offset >= 0:
             q = q.offset(offset)
@@ -415,7 +427,7 @@ async def list_item(
 
         sql_code = str(q)
 
-        results = q.all()
+        results = (await db.scalars(q)).all()
         vres = []
         if join:
             for row, rowl in results:
@@ -454,15 +466,16 @@ async def list_item(
 @app.post('/api/itemNew/{item_name}')
 async def set_item_new(
         item_name, req: fastapi.Request,
-        db: Session = fastapi.Depends(get_db)):
-    async with AuditWithExceptionContextManager(db, req, a_cls=model.Audit) as ctx:
+        db: Session = fastapi.Depends(get_db),
+        db_log: Session = fastapi.Depends(get_db)):
+    async with AuditWithExceptionContextManager(db_log, req, a_cls=model.Audit) as ctx:
         data = await get_req_data(req)
         cls = item_clss[item_name]
         cls_info = cls.get_columns_info()
         data_kvs = {k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in data.items()}
         c = cls(**data_kvs).update_self(**data_kvs)
         db.add(c)
-        db.commit()
+        await db.commit()
         ctx.res = ctx.format_res(c.to_dict())
     return ctx.res
 
@@ -479,8 +492,12 @@ async def set_item(
         cls_info = cls.get_columns_info()
         data_kvs = {k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in data.items()}
         c = cls(**data_kvs).update_self(**data_kvs)
-        db.merge(c)
-        db.commit()
+        print(id(db))
+        print(id(db))
+        print(id(db))
+        print(id(db))
+        await db.merge(c)
+        # await db.commit()
         ctx.res = ctx.format_res(c.to_dict())
     return ctx.res
 
@@ -507,23 +524,24 @@ async def set_items(
         t0 = time.time()
 
         from sqlalchemy.dialects.postgresql import insert as insert_func_postgresql
-        # from sqlalchemy.dialects.mysql import insert as insert_func_mysql
+        from sqlalchemy.dialects.mysql import insert as insert_func_mysql
 
         values = [{k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in d.items()} for d in data['data']]
 
         if (
-                SQLALCHEMY_DATABASE_URL.startswith('mysql') or
+                # SQLALCHEMY_DATABASE_URL.startswith('mysql') or
                 SQLALCHEMY_DATABASE_URL.startswith('sqlite')):
-            def bulk_upsert_mappings(_data):
+            async def bulk_upsert_mappings(_data):
                 entries_to_update = []
                 entries_to_put = []
                 _t0 = time.time()
                 if has_iid:
-                    has_in_db = {r[0]: r[1] for r in db.query(pkd, getattr(cls, 'iid')).filter(
-                        getattr(cls, pk).in_(list(_d[pk] for _d in _data))).all()}
+                    has_in_db = {getattr(r, pk): getattr(r, 'iid') for r in (await db.scalars(select(cls).filter(
+                        getattr(cls, pk).in_(list(_d[pk] for _d in _data))))).all()}
+                    print(11111111111111111, has_in_db)
                 else:
-                    has_in_db = set(r[0] for r in db.query(pkd).filter(
-                        getattr(cls, pk).in_(list(_d[pk] for _d in _data))).all())
+                    has_in_db = set(r[0] for r in (await db.scalars(select(pkd).filter(
+                        getattr(cls, pk).in_(list(_d[pk] for _d in _data))))).all())
 
                 print(
                     "Total time for upsert with MAPPING select "
@@ -544,15 +562,15 @@ async def set_items(
                 print(f'put:{len(entries_to_put)}')
                 if entries_to_put:
                     _stmt = cls.__table__.insert()
-                    model.engine.execute(
+                    await db.execute(
                         _stmt,
                         entries_to_put
                     )
 
                 # db.bulk_insert_mappings(cls, entries_to_put)
                 if entries_to_update:
-                    db.bulk_update_mappings(cls, entries_to_update)
-                    db.commit()
+                    await db.bulk_update_mappings(cls, entries_to_update)
+                    await db.commit()
 
                 print(
                     "Total time for upsert with MAPPING update "
@@ -566,13 +584,13 @@ async def set_items(
                     + str(len(entries_to_update))
                 )
 
-            bulk_upsert_mappings(values)
+            await bulk_upsert_mappings(values)
         elif SQLALCHEMY_DATABASE_URL.startswith('postgresql'):
-            insert_func = insert_func_postgresql
-            stmt = insert_func(cls).values(values)
+            stmt = insert_func_postgresql(cls).values(values)
             stmt = stmt.on_conflict_do_update(
                 # Let's use the constraint name which was visible in the original posts error msg
-                constraint=pk,
+                # constraint=pk,
+                index_elements=pkd,
 
                 # The columns that should be updated on conflict
                 set_={
@@ -580,17 +598,29 @@ async def set_items(
                     for key in cls_info
                 }
             )
-            model.engine.execute(
+            await db.scalars(
                 stmt
             )
+        elif SQLALCHEMY_DATABASE_URL.startswith('mysql'):
+            # https://docs.sqlalchemy.org/en/14/dialects/mysql.html#insert-on-duplicate-key-update-upsert
+            stmt = insert_func_mysql(cls).values(values)
+            stmt = stmt.on_duplicate_key_update(**{
+                    key: getattr(stmt.inserted, key)
+                    for key in cls_info
+                }
+            )
+            await db.execute(
+                stmt
+            )
+
         else:
             stmt = cls.__table__.insert()
             stmt = stmt.prefix_with("OR REPLACE")
-            model.engine.execute(
+            await db.execute(
                 stmt,
                 values
             )
-        model.engine.execute("select 1").scalar()
+        await db.scalar("select 1")
         # db.execute("VACUUM")  # 清理已删除的文件空间
         # db.commit()
         res = f"SqlAlchemy Core Insert: Total time for {len(data['data'])} records " + str(time.time() - t0) + " secs"
@@ -612,7 +642,7 @@ async def del_item(item_name, body: ListItemParam,
         else:
             limit, offset = 0, 0
         cls = item_clss[item_name]
-        query_d = db.query(cls).filter(
+        query_d = select(cls).filter(
             *(getattr(cls, flr['key']) == flr['value']
               for flr in data.get('filters', []))
         )
@@ -621,10 +651,10 @@ async def del_item(item_name, body: ListItemParam,
         if limit:
             query_d = query_d.limit(limit)
         res = []
-        for d in query_d.all():
+        for d in (await db.scalars(query_d)).all():
             res.append(d.to_dict())
-            db.delete(d)
-            db.commit()
+            await db.execute(delete(d))
+            await db.commit()
         ctx.res = {
             "server_time": time.time(),
             "data": res,
@@ -639,26 +669,10 @@ async def del_s_item_pk(
         req: fastapi.Request, db: Session = fastapi.Depends(get_db)):
     async with AuditWithExceptionContextManager(db, req, a_cls=model.Audit) as ctx:
         cls = item_clss[item_name]
-        db.query(cls).delete()
-        db.commit()
-        db.execute("VACUUM")  # 清理已删除的文件空间
-        db.commit()
-        ctx.res = {
-            "server_time": time.time(),
-        }
-    return ctx.res
-
-
-@app.get('/api/itemCleanByTable/{item_name}')
-async def del_item_pk(
-        item_name,
-        req: fastapi.Request, db: Session = fastapi.Depends(get_db)):
-    async with AuditWithExceptionContextManager(db, req, a_cls=model.Audit) as ctx:
-        cls = item_clss[item_name]
-        db.query(cls).delete()
-        db.commit()
-        db.execute("VACUUM")
-        db.commit()
+        await db.execute(delete(cls))
+        await db.commit()
+        await db.execute("VACUUM")  # 清理已删除的文件空间
+        await db.commit()
         ctx.res = {
             "server_time": time.time(),
         }
@@ -673,7 +687,7 @@ class ListItemPKParam(BaseModel):
 
 
 @app.delete('/api/itemByPK/{item_name}')
-async def del_item_pk(
+async def del_s_item_pk(
         item_name, body: ListItemPKParam,
         req: fastapi.Request, db: Session = fastapi.Depends(get_db)):
     async with AuditWithExceptionContextManager(db, req, a_cls=model.Audit) as ctx:
@@ -681,13 +695,13 @@ async def del_item_pk(
         res = []
         for pk in body.pks:
             pk_keys = cls.get_primary_keys()
-            for d in db.query(cls).filter(
+            for d in (await db.scalars(select(cls).filter(
                     *(getattr(cls, pk_key) == pk
                       for pk_key in pk_keys)
-            ).all():
+            ))).all():
                 res.append(d.to_dict())
-                db.delete(d)
-                db.commit()
+                await db.execute(delete(d))
+                await db.commit()
         ctx.res = {
             "server_time": time.time(),
             "data": res,
@@ -709,8 +723,9 @@ async def html_list_secret(
         )
     res = list(
         d.to_dict()
-        for d in db.query(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).limit(1000).all()
+        for d in
+        (await db.scalars(select(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).limit(1000))).all()
     )
     return format_to_form(f"/api/item/{item_name}", cls.get_columns_infos()) + f'''一共有{str(
-        db.query(cls).filter(*(getattr(cls, k) == v for k, v in data.items())).count())}条数据''' + format_to_table(
+        (await db.scalars(select(func.count(cls)).filter(*(getattr(cls, k) == v for k, v in data.items())))))}条数据''' + format_to_table(
         res, keys=cls.get_columns())
