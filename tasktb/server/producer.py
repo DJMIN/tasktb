@@ -26,7 +26,11 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
     dbq = walrus.Walrus(host=host, port=port, db=db)
     while True:
         try:
-            tasks_info = list_task(status=0, size=1000)
+            tasks_info = list_task(
+                status=0,
+                size=1000,
+                timecanstart=time.time()
+            )
         except requests.exceptions.ConnectionError:
             logging_info(f'任务服务器端口[{default.WEB_PORT}]还未启动，取不到任务，5秒后自动重试')
             time.sleep(5)
