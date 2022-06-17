@@ -27,44 +27,62 @@ from fastapi import Request
 print(f"db路径: {SQLALCHEMY_DATABASE_URL}")
 
 IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith('sqlite')
-IS_ASYNC = ('aiomysql' in SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SQLALCHEMY_DATABASE_URL)
-if IS_SQLITE:
-    # 生成一个sqlite SQLAlchemy引擎
-    engine = create_async_engine(
+IS_ASYNC = ('aiomysql' in SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SQLALCHEMY_DATABASE_URL) or ("+asyncpg" in SQLALCHEMY_DATABASE_URL)
+
+
+if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
+    sqlite_engine = create_async_engine(
         SQLALCHEMY_DATABASE_URL,
         # echo=True,
         # poolclass=SingletonThreadPool,  # 多线程优化
         connect_args={"check_same_thread": False},
     )
-    # engine.execute("select 1").scalar()
-    SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=engine))
-
-elif IS_ASYNC:
-    engine = create_async_engine(
-        SQLALCHEMY_DATABASE_URL,
-        pool_size=10,
-        pool_timeout=5,
-        pool_recycle=30,
-        max_overflow=0,
-        pool_pre_ping=True
-    )
-    SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=engine)
-
-else:
-    raise IOError('need aio')
-    # engine = create_engine(
-    #     SQLALCHEMY_DATABASE_URL,
-    #     pool_size=100,
-    #     pool_timeout=5,
-    #     pool_recycle=30,
-    #     max_overflow=0,
-    #     pool_pre_ping=True
-    # )
-    #
-    # SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
-    # insp = reflection.Inspector.from_engine(engine)
+    sqlite_SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=sqlite_engine))
 
 
+def get_engine_session():
+    if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
+        global sqlite_engine, sqlite_SessionLocal
+        _engine, _SessionLocal = sqlite_engine, sqlite_SessionLocal
+    elif IS_SQLITE:
+        # 生成一个sqlite SQLAlchemy引擎
+        _engine = create_async_engine(
+            SQLALCHEMY_DATABASE_URL,
+            # echo=True,
+            # poolclass=SingletonThreadPool,  # 多线程优化
+            connect_args={"check_same_thread": False},
+        )
+        # engine.execute("select 1").scalar()
+        _SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=_engine))
+
+    elif IS_ASYNC:
+        _engine = create_async_engine(
+            SQLALCHEMY_DATABASE_URL,
+            pool_size=10,
+            pool_timeout=5,
+            pool_recycle=30,
+            max_overflow=0,
+            pool_pre_ping=True
+        )
+        _SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=_engine)
+
+    else:
+        raise IOError('need aio')
+        # engine = create_engine(
+        #     SQLALCHEMY_DATABASE_URL,
+        #     pool_size=100,
+        #     pool_timeout=5,
+        #     pool_recycle=30,
+        #     max_overflow=0,
+        #     pool_pre_ping=True
+        # )
+        #
+        # SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+        # insp = reflection.Inspector.from_engine(engine)
+    return _engine, _SessionLocal
+
+
+engine, SessionLocal = get_engine_session()
 Base = declarative_base()
 
 # LOOP = get_event_loop()
@@ -109,15 +127,7 @@ Base = declarative_base()
 def init_db():  # 初始化表
     if IS_ASYNC:
         async def start() -> declarative_base:
-            _engine = create_async_engine(
-                SQLALCHEMY_DATABASE_URL,
-                pool_size=10,
-                pool_timeout=5,
-                pool_recycle=30,
-                max_overflow=0,
-                pool_pre_ping=True
-            )
-            sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=_engine)
+            _engine, _ = get_engine_session()
             Base.metadata.bind = _engine
             async with _engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
@@ -129,15 +139,7 @@ def init_db():  # 初始化表
 def drop_db():  # 删除表
     if IS_ASYNC:
         async def start() -> declarative_base:
-            _engine = create_async_engine(
-                SQLALCHEMY_DATABASE_URL,
-                pool_size=10,
-                pool_timeout=5,
-                pool_recycle=30,
-                max_overflow=0,
-                pool_pre_ping=True
-            )
-            sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=_engine)
+            _engine, _ = get_engine_session()
             Base.metadata.bind = _engine
             async with _engine.begin() as conn:
                 await conn.run_sync(Base.metadata.drop_all)
@@ -166,7 +168,9 @@ if IS_ASYNC:
 
 class User(Base, Mixin):
     __tablename__ = "user"
-    username = Column(String(32), primary_key=True, nullable=False, index=True)
+    username = Column(String(32), primary_key=True, nullable=False, index=True,
+                      # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+                      )
     password = Column(Text(), nullable=False)
     nickname = Column(String(32), nullable=False, index=True)
     active = Column(Integer, index=True)
@@ -196,7 +200,9 @@ class User(Base, Mixin):
 
 class Task(Base, Mixin):
     __tablename__ = "task"
-    tasktype = Column(VARCHAR(128), nullable=False, primary_key=True, index=True)
+    tasktype = Column(VARCHAR(128), nullable=False, primary_key=True, index=True,
+                      # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+                      )
     qid = Column(Integer, nullable=False, index=True)
     info = Column(Text)
     status = Column(Integer, nullable=False)
@@ -204,8 +210,12 @@ class Task(Base, Mixin):
 
 class Taskinstance(Base, Mixin):
     __tablename__ = TABLE_NAME_TASKINSTANCE
-    iid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True)
-    uuid = Column(VARCHAR(64), index=True, unique=True, comment='唯一索引')
+    iid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True,
+                 # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+                 )
+    uuid = Column(VARCHAR(64), index=True, unique=True, comment='唯一索引',
+                  # **({"sqlite_on_conflict_unique":'REPLACE'} if IS_SQLITE else {})
+                  )
     project = Column(VARCHAR(16), index=True, comment='项目')
 
     status = Column(Integer, nullable=False, server_default='0', default=0, comment='任务状态', index=True)
@@ -259,8 +269,10 @@ class Taskinstance(Base, Mixin):
     @declared_attr
     def uuid(self):
         return Column(
-            VARCHAR(64), index=True, unique=True, onupdate=f'{self.project}--{self.tasktype}--{self.key}',
-            comment='唯一索引')
+            VARCHAR(64), index=True, unique=True,
+            onupdate=f'{self.project}--{self.tasktype}--{self.key}', comment='唯一索引',
+            # **({"sqlite_on_conflict_unique":'REPLACE'} if IS_SQLITE else {})
+        )
 
     def gen_uuid(self):
         return f'{self.project}--{self.tasktype}--{self.key}'
@@ -269,7 +281,9 @@ class Taskinstance(Base, Mixin):
 class Audit(Base, Mixin):
     __tablename__ = "audit"
 
-    uuid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True)
+    uuid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True,
+                  # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+                  )
     user = Column(String(256), index=True)
     client = Column(String(256), nullable=False, index=True)
     base_url = Column(String(256), index=True)

@@ -1,6 +1,13 @@
 import tasktb
 import multiprocessing
 import time
+import os
+os.environ['LD_LIBRARY_PATH']="/usr/local/lib"
+# from pysqlite3 import dbapi2 as sqlite3
+import  sqlite3
+
+
+print('sqlite version', sqlite3.sqlite_version_info, sqlite3.sqlite_version, sqlite3.__file__)
 
 # 启动服务
 multiprocessing.Process(target=tasktb.run_app, args=('0.0.0.0', 5127)).start()
@@ -22,3 +29,11 @@ print(tb.update_tasks([
 ],
     status=1
 ))
+print(tb.get(size=12))
+print(tb.update_tasks([
+    {'value': 1},
+    {'value': 2},
+],
+    status=0
+))
+print(tb.get(size=12))

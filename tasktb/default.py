@@ -99,9 +99,12 @@ if __name__ =="__main__":
     #print list(select([moz_bookmarks, moz_bookmarksB], moz_bookmarks.c.b_id == moz_bookmarksB.c.id).execute())
 """
 
-# SQLALCHEMY_DATABASE_URL: str = 'sqlite+aiosqlite:///:memory:'
+SQLALCHEMY_DATABASE_URL: str = 'sqlite+aiosqlite:///:memory:'
+# SQLALCHEMY_DATABASE_URL: str = 'mysql+aiomysql://mq:1234qwer@127.0.0.1:3306/test'
+# SQLALCHEMY_DATABASE_URL: str = 'sqlite+aiosqlite:///tasktb.db'
+# SQLALCHEMY_DATABASE_URL: str = 'postgresql+asyncpg://user:pass@hostname/dbname'
+
 # SQLALCHEMY_DATABASE_URL: str = 'sqlite:///:memory:'
-SQLALCHEMY_DATABASE_URL: str = 'mysql+aiomysql://mq:1234qwer@127.0.0.1:3306/test'
 # SQLALCHEMY_DATABASE_URL: str = 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
 # SQLALCHEMY_DATABASE_URL: str = 'sqlite:///tasktb.db'
 

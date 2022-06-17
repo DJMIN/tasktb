@@ -517,6 +517,7 @@ async def set_items(
         pk = 'uuid'
         pkd = getattr(cls, pk)
         has_iid = 'iid' in cls_info
+        iids  = [getattr(cls, 'iid')]
         # pk = cls.get_primary_keys()[0]
         # TODO pks
         # pks = cls.get_primary_keys()
@@ -525,12 +526,56 @@ async def set_items(
 
         from sqlalchemy.dialects.postgresql import insert as insert_func_postgresql
         from sqlalchemy.dialects.mysql import insert as insert_func_mysql
+        from sqlalchemy.dialects.sqlite import insert as insert_func_sqlite
 
         values = [{k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in d.items()} for d in data['data']]
 
-        if (
-                # SQLALCHEMY_DATABASE_URL.startswith('mysql') or
-                SQLALCHEMY_DATABASE_URL.startswith('sqlite')):
+        if SQLALCHEMY_DATABASE_URL.startswith('sqlite'):
+            # from sqlalchemy.ext.compiler import compiles
+            # from sqlalchemy.sql.expression import Insert
+            #
+            # @compiles(Insert)
+            # def compile_upsert(insert_stmt, compiler, **kwargs):
+            #     """
+            #     converts every SQL insert to an upsert  i.e;
+            #     INSERT INTO test (foo, bar) VALUES (1, 'a')
+            #     becomes:
+            #     INSERT INTO test (foo, bar) VALUES (1, 'a') ON CONFLICT(foo) DO UPDATE SET (bar = EXCLUDED.bar)
+            #     (assuming foo is a primary key)
+            #     :param insert_stmt: Original insert statement
+            #     :param compiler: SQL Compiler
+            #     :param kwargs: optional arguments
+            #     :return: upsert statement
+            #     """
+            #     pk = insert_stmt.table.primary_key
+            #     insert = compiler.visit_insert(insert_stmt, **kwargs)
+            #     ondup = f'ON CONFLICT ({",".join(c.name for c in pk)}) DO UPDATE SET'
+            #     updates = ', '.join(f"{c.name}=EXCLUDED.{c.name}" for c in insert_stmt.table.columns)
+            #     upsert = ' '.join((insert, ondup, updates))
+            #     return upsert
+
+            stmt = insert_func_sqlite(cls).values(values)
+            stmt = stmt.on_conflict_do_update(
+                # Let's use the constraint name which was visible in the original posts error msg
+                # constraint=pk,
+                index_elements=[pkd],
+                # index_where='DO UPDATE SET',   # https://sqlite.org/lang_UPSERT.html
+                # The columns that should be updated on conflict
+                set_={
+                    key: getattr(stmt.excluded, key)
+                    for key in cls_info
+                }
+            )
+
+            # orm_stmt = (
+            #     select(cls)
+            #     .from_statement(stmt)
+            #     .execution_options(populate_existing=True)
+            # )
+            await db.execute(
+                stmt
+            )
+
             async def bulk_upsert_mappings(_data):
                 entries_to_update = []
                 entries_to_put = []
@@ -538,7 +583,6 @@ async def set_items(
                 if has_iid:
                     has_in_db = {getattr(r, pk): getattr(r, 'iid') for r in (await db.scalars(select(cls).filter(
                         getattr(cls, pk).in_(list(_d[pk] for _d in _data))))).all()}
-                    print(11111111111111111, has_in_db)
                 else:
                     has_in_db = set(r[0] for r in (await db.scalars(select(pkd).filter(
                         getattr(cls, pk).in_(list(_d[pk] for _d in _data))))).all())
@@ -584,23 +628,30 @@ async def set_items(
                     + str(len(entries_to_update))
                 )
 
-            await bulk_upsert_mappings(values)
+            # await bulk_upsert_mappings(values)
         elif SQLALCHEMY_DATABASE_URL.startswith('postgresql'):
             stmt = insert_func_postgresql(cls).values(values)
             stmt = stmt.on_conflict_do_update(
                 # Let's use the constraint name which was visible in the original posts error msg
                 # constraint=pk,
-                index_elements=pkd,
-
+                index_elements=[pkd] + iids,
+                # index_where='DO UPDATE SET',   # https://sqlite.org/lang_UPSERT.html
                 # The columns that should be updated on conflict
                 set_={
                     key: getattr(stmt.excluded, key)
                     for key in cls_info
                 }
+            ).returning(cls)
+
+            orm_stmt = (
+                select(cls)
+                    .from_statement(stmt)
+                    .execution_options(populate_existing=True)
             )
-            await db.scalars(
-                stmt
-            )
+            print((await db.execute(
+                orm_stmt
+            )).scalars())
+
         elif SQLALCHEMY_DATABASE_URL.startswith('mysql'):
             # https://docs.sqlalchemy.org/en/14/dialects/mysql.html#insert-on-duplicate-key-update-upsert
             stmt = insert_func_mysql(cls).values(values)

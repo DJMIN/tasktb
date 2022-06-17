@@ -59,13 +59,13 @@ def list_task(tasktype=None, size=10, status=None, project='default', timecansta
               manager_url=f'{WEB_HOST}:{WEB_PORT}'):
     result = requests.post(f'http://{manager_url}/api/item/{TABLE_NAME_TASKINSTANCE}/list', json={
         "filters": ([
-                       {
-                           'key': 'project',
-                           "value": project,
-                           'like': False,
-                           'typematch': True,
-                       }
-                   ] if project is not None else []) + ([{
+                        {
+                            'key': 'project',
+                            "value": project,
+                            'like': False,
+                            'typematch': True,
+                        }
+                    ] if project is not None else []) + ([{
             'key': 'tasktype',
             "value": tasktype,
             'like': False,
