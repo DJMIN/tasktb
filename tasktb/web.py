@@ -492,10 +492,6 @@ async def set_item(
         cls_info = cls.get_columns_info()
         data_kvs = {k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in data.items()}
         c = cls(**data_kvs).update_self(**data_kvs)
-        print(id(db))
-        print(id(db))
-        print(id(db))
-        print(id(db))
         await db.merge(c)
         # await db.commit()
         ctx.res = ctx.format_res(c.to_dict())
@@ -671,6 +667,7 @@ async def set_items(
                 stmt,
                 values
             )
+        await db.commit()
         await db.scalar("select 1")
         # db.execute("VACUUM")  # 清理已删除的文件空间
         # db.commit()

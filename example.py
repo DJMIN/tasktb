@@ -21,14 +21,16 @@ from tasktb import Tab
 
 tb = Tab('127.0.0.1:5127', project='p1', tasktype='t1')
 # print(tb.set("http://a.com", status=0))
-# print(tb.set_many([f"http://a.com?s={i}" for i in range(10000)], status=0))
+# 一条sqlite(websql)语句的参数不能超过999个。
+for j in range(100000):
+    tb.set_many([f"http://a.com?s={i}" for i in range(j*1000, (j+1)*1000)], status=0)
 print(tb.get(size=12))
-print(tb.update_tasks([
-    {'value': 1},
-    {'value': 2},
+tb.update_tasks([
+    {'value': i} for i in range(8000)
+
 ],
     status=1
-))
+)
 print(tb.get(size=12))
 print(tb.update_tasks([
     {'value': 1},

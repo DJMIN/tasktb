@@ -34,10 +34,10 @@ if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
     sqlite_engine = create_async_engine(
         SQLALCHEMY_DATABASE_URL,
         # echo=True,
-        # poolclass=SingletonThreadPool,  # 多线程优化
-        connect_args={"check_same_thread": False},
+        poolclass=SingletonThreadPool,  # 多线程优化
+        # connect_args={"check_same_thread": False},
     )
-    sqlite_SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=sqlite_engine))
+    sqlite_SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=sqlite_engine)
 
 
 def get_engine_session():
@@ -159,11 +159,10 @@ def get_db():
 if IS_ASYNC:
     async def get_db() -> AsyncSession:
         async with SessionLocal() as db:
-            async with db.begin():
-                try:
-                    yield db
-                finally:
-                    await db.close()
+            try:
+                yield db
+            finally:
+                await db.close()
 
 
 class User(Base, Mixin):
@@ -329,8 +328,9 @@ class Audit(Base, Mixin):
         s = cls(**data)
 
         try:
-            db.add(s)
-            await db.commit()
+            if not  IS_SQLITE:
+                db.add(s)
+                await db.commit()
         # except sqlalchemy.exc.PendingRollbackError:
         except Exception as e:
             logging.exception(e)
