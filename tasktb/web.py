@@ -3,6 +3,7 @@ import datetime
 import json
 import os.path
 import sqlite3
+import asyncio
 import time
 import traceback
 import typing
@@ -118,7 +119,7 @@ class AuditWithExceptionContextManager:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if exc_tb is not None:
-            ex_str = f'[{exc_type.__name__}] {str(exc_val)}'
+            ex_str = f'[{exc_type.__class__}] {str(exc_val)}'
             tb = '\n'.join(
                 traceback.format_tb(exc_tb, self._verbose)
                 if self._verbose else traceback.format_tb(exc_tb))
@@ -432,8 +433,9 @@ async def list_item(
             try:
                 results = (await db.scalars(q)).all()
                 break
-            except AttributeError:
-                print('查询太快了，请等等')
+            except Exception as ex:
+                print(f'查询太快了，请等等,  {ex.__class__}')
+                await asyncio.sleep(1)
 
         vres = []
         if join:

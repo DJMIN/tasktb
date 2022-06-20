@@ -37,7 +37,7 @@ if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
         poolclass=SingletonThreadPool,  # 多线程优化
         # connect_args={"check_same_thread": False},
     )
-    sqlite_SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=sqlite_engine)
+    sqlite_SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=sqlite_engine))
 
 
 def get_engine_session():
@@ -53,18 +53,18 @@ def get_engine_session():
             connect_args={"check_same_thread": False},
         )
         # engine.execute("select 1").scalar()
-        _SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=_engine))
+        _SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=_engine)
 
     elif IS_ASYNC:
         _engine = create_async_engine(
             SQLALCHEMY_DATABASE_URL,
-            pool_size=10,
+            pool_size=100,
             pool_timeout=5,
             pool_recycle=30,
             max_overflow=0,
             pool_pre_ping=True
         )
-        _SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=False, bind=_engine)
+        _SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=_engine))
 
     else:
         raise IOError('need aio')
