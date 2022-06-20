@@ -2,6 +2,7 @@ import builtins
 import datetime
 import json
 import os.path
+import sqlite3
 import time
 import traceback
 import typing
@@ -427,7 +428,13 @@ async def list_item(
 
         sql_code = str(q)
 
-        results = (await db.scalars(q)).all()
+        while True:
+            try:
+                results = (await db.scalars(q)).all()
+                break
+            except AttributeError:
+                print('查询太快了，请等等')
+
         vres = []
         if join:
             for row, rowl in results:
@@ -550,27 +557,27 @@ async def set_items(
             #     upsert = ' '.join((insert, ondup, updates))
             #     return upsert
 
-            stmt = insert_func_sqlite(cls).values(values)
-            stmt = stmt.on_conflict_do_update(
-                # Let's use the constraint name which was visible in the original posts error msg
-                # constraint=pk,
-                index_elements=[pkd],
-                # index_where='DO UPDATE SET',   # https://sqlite.org/lang_UPSERT.html
-                # The columns that should be updated on conflict
-                set_={
-                    key: getattr(stmt.excluded, key)
-                    for key in cls_info
-                }
-            )
+            async def save_data(_data):
+                _stmt = insert_func_sqlite(cls).values(_data)
+                _stmt = _stmt.on_conflict_do_update(
+                    index_elements=[pkd],
+                    # index_where='DO UPDATE SET',   # https://sqlite.org/lang_UPSERT.html
+                    set_={
+                        key: getattr(_stmt.excluded, key)
+                        for key in cls_info
+                    }
+                )
 
-            # orm_stmt = (
-            #     select(cls)
-            #     .from_statement(stmt)
-            #     .execution_options(populate_existing=True)
-            # )
-            await db.execute(
-                stmt
-            )
+                try:
+                    await db.execute(
+                        _stmt
+                    )
+                except Exception as ex:
+                    if str(ex).startswith('(sqlite3.OperationalError) too many SQL variables'):
+                        await save_data(_data[0:len(_data)//2])
+                        await save_data(_data[len(_data)//2:])
+                    else:
+                        raise ex
 
             async def bulk_upsert_mappings(_data):
                 entries_to_update = []
@@ -624,6 +631,7 @@ async def set_items(
                     + str(len(entries_to_update))
                 )
 
+            await save_data(values)
             # await bulk_upsert_mappings(values)
         elif SQLALCHEMY_DATABASE_URL.startswith('postgresql'):
             stmt = insert_func_postgresql(cls).values(values)
