@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.engine import reflection
 from sqlalchemy.pool import SingletonThreadPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlalchemy.ext.declarative import declared_attr
 from asyncio import get_event_loop, set_event_loop
 
@@ -27,8 +28,8 @@ from fastapi import Request
 print(f"db路径: {SQLALCHEMY_DATABASE_URL}")
 
 IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith('sqlite')
-IS_ASYNC = ('aiomysql' in SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SQLALCHEMY_DATABASE_URL) or ("+asyncpg" in SQLALCHEMY_DATABASE_URL)
-
+IS_ASYNC = ('aiomysql' in SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SQLALCHEMY_DATABASE_URL) or (
+            "+asyncpg" in SQLALCHEMY_DATABASE_URL)
 
 if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
     sqlite_engine = create_async_engine(
@@ -37,7 +38,8 @@ if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
         poolclass=SingletonThreadPool,  # 多线程优化
         # connect_args={"check_same_thread": False},
     )
-    sqlite_SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=sqlite_engine))
+    sqlite_SessionLocal = scoped_session(
+        sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=sqlite_engine))
 
 
 def get_engine_session():
@@ -53,18 +55,39 @@ def get_engine_session():
             connect_args={"check_same_thread": False},
         )
         # engine.execute("select 1").scalar()
-        _SessionLocal = sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=_engine)
+        _SessionLocal = sessionmaker(class_=AsyncSession, future=True, autocommit=False, autoflush=True, bind=_engine)
+
+    elif IS_ASYNC:
+        from aiomysql.sa import create_engine as create_engine_aiomysql
+        from aiomysql.pool import Pool as PoolAioMSQL
+        _engine = create_async_engine(
+            SQLALCHEMY_DATABASE_URL,
+            # poolclass=AsyncAdaptedQueuePool,  # 多线程优化
+            pool_size=100,
+            # pool_timeout=5,
+            pool_recycle=30,
+            # max_overflow=0,
+            pool_pre_ping=True
+        )
+        _SessionLocal = sessionmaker(
+            class_=AsyncSession, future=True, autocommit=False, autoflush=True,
+            expire_on_commit=False,  #
+            bind=_engine)
 
     elif IS_ASYNC:
         _engine = create_async_engine(
             SQLALCHEMY_DATABASE_URL,
+            poolclass=SingletonThreadPool,  # 多线程优化
             pool_size=100,
-            pool_timeout=5,
+            # pool_timeout=5,
             pool_recycle=30,
-            max_overflow=0,
+            # max_overflow=0,
             pool_pre_ping=True
         )
-        _SessionLocal = scoped_session(sessionmaker(class_=AsyncSession, autocommit=False, autoflush=True, bind=_engine))
+        _SessionLocal = sessionmaker(
+            class_=AsyncSession, future=True, autocommit=False, autoflush=True,
+            expire_on_commit=False,  #
+            bind=_engine)
 
     else:
         raise IOError('need aio')
@@ -84,6 +107,7 @@ def get_engine_session():
 
 engine, SessionLocal = get_engine_session()
 Base = declarative_base()
+
 
 # LOOP = get_event_loop()
 
@@ -131,6 +155,7 @@ def init_db():  # 初始化表
             Base.metadata.bind = _engine
             async with _engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+
         asyncio.run(start())
     else:
         Base.metadata.create_all(engine)
@@ -143,6 +168,7 @@ def drop_db():  # 删除表
             Base.metadata.bind = _engine
             async with _engine.begin() as conn:
                 await conn.run_sync(Base.metadata.drop_all)
+
         asyncio.run(start())
     else:
         Base.metadata.drop_all(engine)
@@ -328,7 +354,7 @@ class Audit(Base, Mixin):
         s = cls(**data)
 
         try:
-            if not  IS_SQLITE:
+            if not IS_SQLITE:
                 db.add(s)
                 await db.commit()
         # except sqlalchemy.exc.PendingRollbackError:

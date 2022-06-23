@@ -39,7 +39,7 @@ def get_web_g(key, default='', manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
 
 
 def set_web_g(key, value, manager_url=f'{WEB_HOST}:{WEB_PORT}', **kwargs):
-    result = requests.get(f'http://{manager_url}/api/setG/{key}/{value}', data=kwargs).text
+    result = requests.get(f'http://{manager_url}/api/setG/{key}', data=str(value).encode('utf-8')).text
     return result
 
 

@@ -7,43 +7,13 @@ import sys
 
 
 from tasktb.default import WEB_PORT, set_global, REDIS_PORT, REDIS_HOST, REDIS_DB_TASK
-from tasktb.server import main_manger_process, task_publisher, run_app
+from tasktb.server import main_manger_process, task_publisher, run_app, run_all
 from tasktb.default import set_url, SQLALCHEMY_DATABASE_URL
 
 
 @click.group()
 def ctl():
     pass
-
-
-def _run(host, port, redis_host, redis_port, redis_db_task, file, url):
-    """web manager runner"""
-    if file:
-        file_path = os.path.realpath(file)
-        set_url(f'sqlite+aiosqlite:///{file_path}')
-    elif url:
-        set_url(url)
-
-    click.echo(f'start manager: {host}:{port} db路径: {SQLALCHEMY_DATABASE_URL}')
-
-    # _kill1(port)
-    # sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sockobj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sockobj.settimeout(3)
-    # sockobj.bind((host, port))
-    result = sockobj.connect_ex(('127.0.0.1', port))
-    if result == 0:
-        click.echo(result)
-        raise SystemError('端口被占用了')
-
-    set_global("REDIS_HOST", redis_host)
-    set_global("REDIS_PORT", redis_port)
-    set_global("REDIS_DB_TASK", redis_db_task)
-    main_manger_process.add_process(task_publisher)
-    # main_manger_process.join_all()
-    set_global("WEB_HOST", host if host != '0.0.0.0' else '127.0.0.1')
-    set_global("WEB_PORT", port)
-    run_app(host, port)
 
 
 @click.command()
@@ -55,7 +25,7 @@ def _run(host, port, redis_host, redis_port, redis_db_task, file, url):
 @click.option('-f', '--file', default="", help='web管理端sqlite数据库存储位置路径')
 @click.option('-u', '--url', default="", help='web管理端数据库存储位置路径URL')
 def run(host, port, redis_host, redis_port, redis_db_task, file, url):
-    _run(host, port, redis_host, redis_port, redis_db_task, file, url)
+    run_all(host, port, redis_host, redis_port, redis_db_task, file, url)
 
 
 def _kill1(port):

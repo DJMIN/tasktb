@@ -10,6 +10,10 @@
 pip install tasktb
 
 
+# 代码直接启动服务，方便调试
+import tasktb
+tasktb.run_all()
+
 # 前台启动服务，方便调试
 python -m tasktb.ctl run -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
 
@@ -17,7 +21,7 @@ python -m tasktb.ctl run -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/
 python -m tasktb.ctl start -p 5127 -f './tasktb.db' -h '0.0.0.0'
 
 # 或者后台启动（只适用于Linux），运用mysql，tidb等数据库，-u指定数据库的连接URL，-p指定服务端的监听端口, -h指定服务绑定IP
-python -m tasktb.ctl start -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test' -h '0.0.0.0' -l './tasktb.db'
+python -m tasktb.ctl start -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test' -h '0.0.0.0' -l './tasktb.log'
 
 # 然后就可以浏览器访问 http://127.0.0.1:5127 查看数据
 

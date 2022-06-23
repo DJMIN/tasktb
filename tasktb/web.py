@@ -15,6 +15,7 @@ import fastapi.responses
 import logging
 import collections
 import sqlalchemy.engine.row
+import sqlalchemy.exc
 import d22d
 
 from fastapi import Query, Body
@@ -119,7 +120,7 @@ class AuditWithExceptionContextManager:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if exc_tb is not None:
-            ex_str = f'[{exc_type.__class__}] {str(exc_val)}'
+            ex_str = f'[{exc_type}] {str(exc_val)}'
             tb = '\n'.join(
                 traceback.format_tb(exc_tb, self._verbose)
                 if self._verbose else traceback.format_tb(exc_tb))
@@ -150,9 +151,12 @@ async def get_g(key, default):
     return g.get(key, default)
 
 
-@app.get('/api/setG/{key:str}/{value:str}')
-async def set_g(key, value):
-    g[key] = value
+@app.get('/api/setG/{key:str}')
+async def set_g(req: fastapi.Request, key):
+    value = b''
+    async for b in req.stream():
+        value += b
+    g[key] = value.decode()
     return 'ok'
 
 
@@ -433,8 +437,9 @@ async def list_item(
             try:
                 results = (await db.scalars(q)).all()
                 break
-            except Exception as ex:
-                print(f'查询太快了，请等等,  {ex.__class__}')
+            except sqlalchemy.exc.StatementError as ex:
+                # print(f'查询太快了，请等等,  {ex.__class__}')
+                print(f'查询太快了，请等等,  {ex}')
                 await asyncio.sleep(1)
 
         vres = []
@@ -666,6 +671,8 @@ async def set_items(
                     for key in cls_info
                 }
             )
+            # [<class 'AttributeError'>] 'NoneType' object has no attribute 'twophase'
+            # [<class 'RuntimeError'>] readexactly() called while another coroutine is already waiting for incoming data"
             await db.execute(
                 stmt
             )
@@ -677,8 +684,21 @@ async def set_items(
                 stmt,
                 values
             )
-        await db.commit()
-        await db.scalar("select 1")
+        try:
+            await db.commit()
+
+        except AttributeError:
+            # [<class 'AttributeError'>] 'NoneType' object has no attribute 'dispatch'
+            # 实测可无视
+            pass
+        try:
+            # [<class 'sqlalchemy.exc.OperationalError'>] (pymysql.err.OperationalError) (2014, 'Command Out of Sync')
+            # [<class 'RuntimeError'>] readexactly() called while another coroutine is already waiting for incoming data"
+            # [<class 'AttributeError'>] 'NoneType' object has no attribute 'dispatch'
+            # [<class 'sqlalchemy.exc.ResourceClosedError'>] This result object does not return rows. It has been closed automatically.
+            await db.scalar("select 1")
+        except (sqlalchemy.exc.OperationalError, sqlalchemy.exc.ResourceClosedError,  AttributeError, RuntimeError):
+            pass
         # db.execute("VACUUM")  # 清理已删除的文件空间
         # db.commit()
         res = f"SqlAlchemy Core Insert: Total time for {len(data['data'])} records " + str(time.time() - t0) + " secs"

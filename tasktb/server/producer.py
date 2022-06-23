@@ -24,7 +24,7 @@ logging_info = functools.partial(print, 'task_publisher log:')
 # sys.path.append(BASE_DIR + '/manager')
 
 
-def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.REDIS_DB_TASK):
+def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.REDIS_DB_TASK, q_max=100):
     dbq = walrus.Walrus(host=host, port=port, db=db)
 
     while True:
@@ -54,12 +54,13 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
         G["remain_task"] = tasks_info["total"]
         logging_info(log)
         if tasks:
-            set_tasks_raw(
-                tasks,
-                timelastproceed=time.time(),
-            )
+            logging_info(
+                set_tasks_raw(
+                    tasks,
+                    timelastproceed=time.time(),
+                ))
             task_update = []
-            for task in tasks:
+            for idx, task in enumerate(tasks):
                 if not task.get('period'):
                     task['status'] = 1
                     # set_tasks_raw([task], status=1)
@@ -91,10 +92,14 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
                     "publish_time_format": datetime.datetime.now().__str__().split('.')[0]
 
                 }
+                while len(dbq.List(qid)) > q_max:
+                    time.sleep(1)
+                    logging_info(f'[{qid}]队列已满 ...[{len(dbq.List(qid))}/{q_max}]  now task:[{idx + 1}/{len(tasks)}]')
                 dbq.List(qid).append(orjson.dumps(value))
-            set_tasks_raw(task_update)
+                logging_info(f'{set_tasks_raw(task_update)} ...{idx + 1}/{len(tasks)}')
+                task_update = []
         else:
-            log = f'任务已经消费完毕，取不到任务，5秒后自动重试：{tasks_info}'
+            log = f'任务已经消费完毕，取不到任务，5秒后自动重试'
             G['task_publisher'] = log
             G["remain_task"] = len(tasks)
             logging_info(log)
