@@ -1,10 +1,10 @@
 from tasktb.function import list_task, set_task, set_tasks, set_tasks_raw
-from tasktb.default import WEB_HOST, WEB_PORT
+from tasktb.default import SETTINGS
 
 
 class Tab:
     def __init__(
-            self, manager_url=f"{WEB_HOST}:{WEB_PORT}", project='', tasktype=''):
+            self, manager_url=f"{SETTINGS.WEB_HOST}:{SETTINGS.WEB_PORT}", project='', tasktype=''):
         if len(ms := manager_url.split(':')) < 2:
             self.host = ms[0]
             self.port = 7788

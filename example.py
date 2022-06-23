@@ -9,7 +9,7 @@ import sqlite3
 
 print('sqlite version', sqlite3.sqlite_version_info, sqlite3.sqlite_version, sqlite3.__file__)
 
-tasktb.run_all()
+# tasktb.run_all()
 
 # 启动服务
 # multiprocessing.Process(target=tasktb.run_app, args=('0.0.0.0', 5127)).start()

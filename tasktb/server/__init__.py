@@ -1,6 +1,6 @@
 from .base import main_manger_process
 from .producer import task_publisher
-from tasktb.default import WEB_PORT, REDIS_HOST, REDIS_PORT, REDIS_DB_TASK, set_url, SQLALCHEMY_DATABASE_URL, set_global
+from tasktb.default import SETTINGS
 import os
 import click
 import socket
@@ -25,16 +25,16 @@ def run_app(host, port):
 
 
 def run_all(
-        host="0.0.0.0", port=WEB_PORT, redis_host=REDIS_HOST,
-        redis_port=REDIS_PORT, redis_db_task=REDIS_DB_TASK, file='', url=''):
+        host="0.0.0.0", port=SETTINGS.WEB_PORT, redis_host=SETTINGS.REDIS_HOST,
+        redis_port=SETTINGS.REDIS_PORT, redis_db_task=SETTINGS.REDIS_DB_TASK, file='', url=''):
     """web manager runner"""
     if file:
         file_path = os.path.realpath(file)
-        set_url(f'sqlite+aiosqlite:///{file_path}')
+        SETTINGS.set_setting('SQLALCHEMY_DATABASE_URL', f'sqlite+aiosqlite:///{file_path}')
     elif url:
-        set_url(url)
+        SETTINGS.set_setting('SQLALCHEMY_DATABASE_URL', url)
 
-    click.echo(f'start manager: {host}:{port} db路径: {SQLALCHEMY_DATABASE_URL}')
+    click.echo(f'start manager: {host}:{port} db路径: {SETTINGS.SQLALCHEMY_DATABASE_URL}')
 
     # _kill1(port)
     # sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -46,11 +46,15 @@ def run_all(
         click.echo(result)
         raise SystemError('端口被占用了')
 
-    set_global("REDIS_HOST", redis_host)
-    set_global("REDIS_PORT", redis_port)
-    set_global("REDIS_DB_TASK", redis_db_task)
-    main_manger_process.add_process(task_publisher)
+    SETTINGS.set_setting("REDIS_HOST", redis_host)
+    SETTINGS.set_setting("REDIS_PORT", redis_port)
+    SETTINGS.set_setting("REDIS_DB_TASK", redis_db_task)
+    main_manger_process.add_process(task_publisher, kwargs=dict(
+        host=SETTINGS.REDIS_HOST,
+        port=SETTINGS.REDIS_PORT,
+        db=SETTINGS.REDIS_DB_TASK, q_max=100
+    ))
     # main_manger_process.join_all()
-    set_global("WEB_HOST", host if host != '0.0.0.0' else '127.0.0.1')
-    set_global("WEB_PORT", port)
+    SETTINGS.set_setting("WEB_HOST", host if host != '0.0.0.0' else '127.0.0.1')
+    SETTINGS.set_setting("WEB_PORT", port)
     run_app(host, port)

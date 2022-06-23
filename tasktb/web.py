@@ -27,7 +27,7 @@ from sqlalchemy import delete
 from tasktb.model import get_db, Session, IS_ASYNC
 from tasktb import model
 from tasktb.utils import get_req_data, format_to_table, format_to_form
-from tasktb.default import SQLALCHEMY_DATABASE_URL, WEB_PORT
+from tasktb.default import SETTINGS
 from tasktb.security import create_access_token, check_jwt_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from sqlalchemy import desc
 
@@ -138,8 +138,8 @@ class AuditWithExceptionContextManager:
 @app.get('/')
 async def html_index():
     return {
-        "server": 'tasktb', "msg": f"hello! http://127.0.0.1:{WEB_PORT}/html/item",
-        "db": SQLALCHEMY_DATABASE_URL,
+        "server": 'tasktb', "msg": f"hello! http://127.0.0.1:{SETTINGS.WEB_PORT}/html/item",
+        "db": SETTINGS.SQLALCHEMY_DATABASE_URL,
         "task_publisher": g.get('task_publisher'),
         "remain_task": g.get('remain_task'),
         'server_time': time.time()
@@ -178,11 +178,11 @@ async def is_ctrl(
         token_data: Union[str, Any] = fastapi.Depends(check_jwt_token)
 ):
     data = await get_req_data(req)
-    db_path = SQLALCHEMY_DATABASE_URL.split(':///')[-1]
+    db_path = SETTINGS.SQLALCHEMY_DATABASE_URL.split(':///')[-1]
     db_status = 1 if os.path.exists(db_path) and open(db_path, 'rb').read().startswith(b'SQLite format') else 0
     return {
         "status": 1 if data.get('status') else db_status,
-        "db_path": SQLALCHEMY_DATABASE_URL,
+        "db_path": SETTINGS.SQLALCHEMY_DATABASE_URL,
         "work_path": os.getcwd(),
         "user": token_data,
         'server_time': time.time()
@@ -540,7 +540,7 @@ async def set_items(
 
         values = [{k: change_type[cls_info[k]['type_str'][:4]](v) for k, v in d.items()} for d in data['data']]
 
-        if SQLALCHEMY_DATABASE_URL.startswith('sqlite'):
+        if SETTINGS.SQLALCHEMY_DATABASE_URL.startswith('sqlite'):
             # from sqlalchemy.ext.compiler import compiles
             # from sqlalchemy.sql.expression import Insert
             #
@@ -640,7 +640,7 @@ async def set_items(
 
             await save_data(values)
             # await bulk_upsert_mappings(values)
-        elif SQLALCHEMY_DATABASE_URL.startswith('postgresql'):
+        elif SETTINGS.SQLALCHEMY_DATABASE_URL.startswith('postgresql'):
             stmt = insert_func_postgresql(cls).values(values)
             stmt = stmt.on_conflict_do_update(
                 # Let's use the constraint name which was visible in the original posts error msg
@@ -663,7 +663,7 @@ async def set_items(
                 orm_stmt
             )).scalars())
 
-        elif SQLALCHEMY_DATABASE_URL.startswith('mysql'):
+        elif SETTINGS.SQLALCHEMY_DATABASE_URL.startswith('mysql'):
             # https://docs.sqlalchemy.org/en/14/dialects/mysql.html#insert-on-duplicate-key-update-upsert
             stmt = insert_func_mysql(cls).values(values)
             stmt = stmt.on_duplicate_key_update(**{

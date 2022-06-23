@@ -12,7 +12,7 @@ import functools
 import requests
 # from d22d.model.mysqlmodel import PGController
 from tasktb.model import get_db
-from tasktb import default
+from tasktb.default import SETTINGS
 from tasktb.server.base import main_manger_process
 from tasktb.function import list_task, set_tasks_raw, G
 
@@ -24,7 +24,7 @@ logging_info = functools.partial(print, 'task_publisher log:')
 # sys.path.append(BASE_DIR + '/manager')
 
 
-def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.REDIS_DB_TASK, q_max=100):
+def task_publisher(host=SETTINGS.REDIS_HOST, port=SETTINGS.REDIS_PORT, db=SETTINGS.REDIS_DB_TASK, q_max=100):
     dbq = walrus.Walrus(host=host, port=port, db=db)
 
     while True:
@@ -36,7 +36,7 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
                 timecanstart=time.time()
             )
         except requests.exceptions.ConnectionError:
-            log = f'任务服务器端口[{default.WEB_PORT}]还未启动，取不到任务，5秒后自动重试'
+            log = f'任务服务器端口[{SETTINGS.WEB_PORT}]还未启动，取不到任务，5秒后自动重试'
             logging_info(log)
             time.sleep(5)
             continue
@@ -103,7 +103,7 @@ def task_publisher(host=default.REDIS_HOST, port=default.REDIS_PORT, db=default.
             G['task_publisher'] = log
             G["remain_task"] = len(tasks)
             logging_info(log)
-            time.sleep(default.TIME_RETRY_DB_GET)
+            time.sleep(SETTINGS.TIME_RETRY_DB_GET)
             continue
 
 

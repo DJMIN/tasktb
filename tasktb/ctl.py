@@ -6,9 +6,8 @@ import os
 import sys
 
 
-from tasktb.default import WEB_PORT, set_global, REDIS_PORT, REDIS_HOST, REDIS_DB_TASK
-from tasktb.server import main_manger_process, task_publisher, run_app, run_all
-from tasktb.default import set_url, SQLALCHEMY_DATABASE_URL
+from tasktb.default import SETTINGS
+from tasktb.server import run_all
 
 
 @click.group()
@@ -18,10 +17,10 @@ def ctl():
 
 @click.command()
 @click.option('-h', '--host', default="0.0.0.0", help='web管理端绑定host')
-@click.option('-p', '--port', default=WEB_PORT, help='web管理端绑定端口号')
-@click.option('-rh', '--redis_host', default=REDIS_HOST, help='redis绑定host')
-@click.option('-rp', '--redis_port', default=REDIS_PORT, help='redis绑定端口号')
-@click.option('-rdt', '--redis_db_task', default=REDIS_DB_TASK, help='redis绑定task DB')
+@click.option('-p', '--port', default=SETTINGS.WEB_PORT, help='web管理端绑定端口号')
+@click.option('-rh', '--redis_host', default=SETTINGS.REDIS_HOST, help='redis绑定host')
+@click.option('-rp', '--redis_port', default=SETTINGS.REDIS_PORT, help='redis绑定端口号')
+@click.option('-rdt', '--redis_db_task', default=SETTINGS.REDIS_DB_TASK, help='redis绑定task DB')
 @click.option('-f', '--file', default="", help='web管理端sqlite数据库存储位置路径')
 @click.option('-u', '--url', default="", help='web管理端数据库存储位置路径URL')
 def run(host, port, redis_host, redis_port, redis_db_task, file, url):
@@ -59,10 +58,10 @@ def _kill(port):
 @click.command()
 @click.option('-py', '--python', default=sys.executable, help='python可执行程序路径')
 @click.option('-h', '--host', default="0.0.0.0", help='web管理端绑定host')
-@click.option('-p', '--port', default=WEB_PORT, help='web管理端绑定端口号')
-@click.option('-rh', '--redis_host', default=REDIS_HOST, help='redis绑定host')
-@click.option('-rp', '--redis_port', default=REDIS_PORT, help='redis绑定端口号')
-@click.option('-rdt', '--redis_db_task', default=REDIS_DB_TASK, help='redis绑定task DB')
+@click.option('-p', '--port', default=SETTINGS.WEB_PORT, help='web管理端绑定端口号')
+@click.option('-rh', '--redis_host', default=SETTINGS.REDIS_HOST, help='redis绑定host')
+@click.option('-rp', '--redis_port', default=SETTINGS.REDIS_PORT, help='redis绑定端口号')
+@click.option('-rdt', '--redis_db_task', default=SETTINGS.REDIS_DB_TASK, help='redis绑定task DB')
 @click.option('-f', '--file', default="", help='web管理端sqlite数据库存储位置路径')
 @click.option('-u', '--url', default="", help='web管理端数据库存储位置路径URL')
 @click.option('-l', '--logfile', default="tasktb.log", help='日志位置路径')
@@ -82,7 +81,7 @@ def start(python, host, port, redis_host, redis_port, redis_db_task, file, url, 
     elif url:
         url = url
     else:
-        url = SQLALCHEMY_DATABASE_URL
+        url = SETTINGS.SQLALCHEMY_DATABASE_URL
 
     cmd = f'nohup {python} -m tasktb.ctl run -u "{url}" -h {host} -p {port} -rh {redis_host} -rp {redis_port} -rdt {redis_db_task}> {logfile} 2>&1 &'
     click.echo(cmd)

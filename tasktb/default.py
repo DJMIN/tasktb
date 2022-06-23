@@ -1,8 +1,3 @@
-WEB_HOST = '127.0.0.1'
-WEB_PORT = 5127
-TABLE_NAME_TASKINSTANCE = 'taskinstance'
-TIME_RETRY_DB_GET = 5
-
 """
 常用数据库的创建数据库连接方法
 SQLAlchemy用一个字符串表示连接信息：
@@ -99,26 +94,95 @@ if __name__ =="__main__":
     #print list(select([moz_bookmarks, moz_bookmarksB], moz_bookmarks.c.b_id == moz_bookmarksB.c.id).execute())
 """
 
-# SQLALCHEMY_DATABASE_URL: str = 'sqlite+aiosqlite:///:memory:'
-SQLALCHEMY_DATABASE_URL: str = 'mysql+aiomysql://mq:1234qwer@127.0.0.1:3306/test'
-# SQLALCHEMY_DATABASE_URL: str = 'sqlite+aiosqlite:///tasktb.db'
-# SQLALCHEMY_DATABASE_URL: str = 'postgresql+asyncpg://user:pass@hostname/dbname'
-
-# SQLALCHEMY_DATABASE_URL: str = 'sqlite:///:memory:'
-# SQLALCHEMY_DATABASE_URL: str = 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
-# SQLALCHEMY_DATABASE_URL: str = 'sqlite:///tasktb.db'
-
-REDIS_HOST = '127.0.0.1'
-REDIS_PORT = 6379
-REDIS_DB_TASK = 11
+import multiprocessing
+import json
+import os
 
 
-from functools import partial
+def deco_parm(func):
+    def warp(self):
+        return self.data.get(func.__name__)
+
+    return warp
 
 
-def set_global(key, value):
-    globals()[key] = value
+class SettingOBJ(object):
+    def __init__(self, path='config-tasktb.json'):
+        self.path = path
+        self.data = dict(
+            WEB_HOST='127.0.0.1',
+            WEB_PORT=5127,
+            TABLE_NAME_TASKINSTANCE='taskinstance',
+            TIME_RETRY_DB_GET=5,
+            SQLALCHEMY_DATABASE_URL='sqlite+aiosqlite:///:memory:',
+            # SQLALCHEMY_DATABASE_URL='mysql+aiomysql://mq:1234qwer@127.0.0.1:3306/test',
+            # SQLALCHEMY_DATABASE_URL = 'sqlite+aiosqlite:///tasktb.db',
+            # SQLALCHEMY_DATABASE_URL = 'postgresql+asyncpg://user:pass@hostname/dbname',
+            # SQLALCHEMY_DATABASE_URL = 'sqlite:///:memory:',
+            # SQLALCHEMY_DATABASE_URL = 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test',
+            # SQLALCHEMY_DATABASE_URL = 'sqlite:///tasktb.db',
+            REDIS_HOST='127.0.0.1',
+            REDIS_PORT=6379,
+            REDIS_DB_TASK=11,
+        )
+        if os.path.exists(path):
+            for k, v in json.loads(open(path, 'r', encoding='utf-8').read()).items():
+                self.data[k] = v
+
+    def set_setting(self, k, v):
+        self.data[k] = v
+        with open(self.path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(self.data, indent=4))
+
+    @property
+    @deco_parm
+    def WEB_HOST(self):
+        return
+
+    @property
+    @deco_parm
+    def WEB_PORT(self):
+        return
+
+    @property
+    @deco_parm
+    def TABLE_NAME_TASKINSTANCE(self):
+        return
+
+    @property
+    @deco_parm
+    def TIME_RETRY_DB_GET(self):
+        return
+
+    @property
+    @deco_parm
+    def SQLALCHEMY_DATABASE_URL(self):
+        return
+
+    @property
+    @deco_parm
+    def REDIS_HOST(self):
+        return
+
+    @property
+    @deco_parm
+    def REDIS_PORT(self):
+        return
+
+    @property
+    @deco_parm
+    def REDIS_DB_TASK(self):
+        return
 
 
-set_web_port = partial(set_global, "WEB_PORT")
-set_url = partial(set_global, "SQLALCHEMY_DATABASE_URL")
+SETTINGS = SettingOBJ()
+# print(SETTINGS.WEB_HOST)
+# from functools import partial
+
+
+# def set_global(key, value):
+#     globals()[key] = value
+#
+#
+# set_web_port = partial(set_global, "WEB_PORT")
+# set_url = partial(set_global, "SQLALCHEMY_DATABASE_URL")

@@ -19,21 +19,20 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlalchemy.ext.declarative import declared_attr
 from asyncio import get_event_loop, set_event_loop
 
-from tasktb.default import SQLALCHEMY_DATABASE_URL, TABLE_NAME_TASKINSTANCE
+from tasktb.default import SETTINGS
 from tasktb.modelmid import Mixin, CursorDictionConnect
 from tasktb.security import check_jwt_token
 from sqlalchemy.future import select
 from fastapi import Request
 
-print(f"db路径: {SQLALCHEMY_DATABASE_URL}")
 
-IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith('sqlite')
-IS_ASYNC = ('aiomysql' in SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SQLALCHEMY_DATABASE_URL) or (
-            "+asyncpg" in SQLALCHEMY_DATABASE_URL)
+IS_SQLITE = SETTINGS.SQLALCHEMY_DATABASE_URL.startswith('sqlite')
+IS_ASYNC = ('aiomysql' in SETTINGS.SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SETTINGS.SQLALCHEMY_DATABASE_URL) or (
+            "+asyncpg" in SETTINGS.SQLALCHEMY_DATABASE_URL)
 
-if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
+if SETTINGS.SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
     sqlite_engine = create_async_engine(
-        SQLALCHEMY_DATABASE_URL,
+        SETTINGS.SQLALCHEMY_DATABASE_URL,
         # echo=True,
         poolclass=SingletonThreadPool,  # 多线程优化
         # connect_args={"check_same_thread": False},
@@ -43,13 +42,14 @@ if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
 
 
 def get_engine_session():
-    if SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
+    print(f"db路径: {SETTINGS.SQLALCHEMY_DATABASE_URL}")
+    if SETTINGS.SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
         global sqlite_engine, sqlite_SessionLocal
         _engine, _SessionLocal = sqlite_engine, sqlite_SessionLocal
     elif IS_SQLITE:
         # 生成一个sqlite SQLAlchemy引擎
         _engine = create_async_engine(
-            SQLALCHEMY_DATABASE_URL,
+            SETTINGS.SQLALCHEMY_DATABASE_URL,
             # echo=True,
             # poolclass=SingletonThreadPool,  # 多线程优化
             connect_args={"check_same_thread": False},
@@ -61,7 +61,7 @@ def get_engine_session():
         from aiomysql.sa import create_engine as create_engine_aiomysql
         from aiomysql.pool import Pool as PoolAioMSQL
         _engine = create_async_engine(
-            SQLALCHEMY_DATABASE_URL,
+            SETTINGS.SQLALCHEMY_DATABASE_URL,
             # poolclass=AsyncAdaptedQueuePool,  # 多线程优化
             pool_size=100,
             # pool_timeout=5,
@@ -76,7 +76,7 @@ def get_engine_session():
 
     elif IS_ASYNC:
         _engine = create_async_engine(
-            SQLALCHEMY_DATABASE_URL,
+            SETTINGS.SQLALCHEMY_DATABASE_URL,
             poolclass=SingletonThreadPool,  # 多线程优化
             pool_size=100,
             # pool_timeout=5,
@@ -234,7 +234,7 @@ class Task(Base, Mixin):
 
 
 class Taskinstance(Base, Mixin):
-    __tablename__ = TABLE_NAME_TASKINSTANCE
+    __tablename__ = SETTINGS.TABLE_NAME_TASKINSTANCE
     iid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True,
                  # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
                  )

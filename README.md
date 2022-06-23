@@ -12,7 +12,15 @@ pip install tasktb
 
 # 代码直接启动服务，方便调试
 import tasktb
-tasktb.run_all()
+tasktb.run_all(
+    host="0.0.0.0", port=5127, redis_host='127.0.0.1',
+    redis_port=6379, redis_db_task=11, file='tasktb.db')
+tasktb.run_all(
+    host="0.0.0.0", port=5127, redis_host='127.0.0.1',
+    redis_port=6379, redis_db_task=11, url='sqlite+aiosqlite:///:memory:')
+tasktb.run_all(
+    host="0.0.0.0", port=5127, redis_host='127.0.0.1',
+    redis_port=6379, redis_db_task=11, url='mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test')
 
 # 前台启动服务，方便调试
 python -m tasktb.ctl run -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test'
