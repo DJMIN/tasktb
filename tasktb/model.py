@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import traceback
 import asyncio
 
@@ -42,7 +43,7 @@ if SETTINGS.SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
 
 
 def get_engine_session():
-    print(f"db路径: {SETTINGS.SQLALCHEMY_DATABASE_URL}")
+    print(f"[PID:{os.getpid()}] db路径: {SETTINGS.SQLALCHEMY_DATABASE_URL}")
     if SETTINGS.SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
         global sqlite_engine, sqlite_SessionLocal
         _engine, _SessionLocal = sqlite_engine, sqlite_SessionLocal
@@ -149,6 +150,7 @@ Base = declarative_base()
 
 
 def init_db():  # 初始化表
+    print("初始化表中。。。")
     if IS_ASYNC:
         async def start() -> declarative_base:
             _engine, _ = get_engine_session()
