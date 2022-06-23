@@ -30,6 +30,7 @@ class MangerProcess:
                     time.sleep(replay_time)
                 except Exception as ex:
                     logging.exception(f'[PID:{os.getpid()}] 每{retry_time}秒重试，第{times}次执行函数 {func.__name__} {ex}')
+                    print(f'MangerProcess ERROR：[PID:{os.getpid()}] 每{retry_time}秒重试，第{times}次执行函数 {func.__name__} {ex}')
                     time.sleep(retry_time)
 
         p = multiprocessing.Process(target=_run_always, daemon=True)

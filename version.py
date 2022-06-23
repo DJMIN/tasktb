@@ -1,6 +1,7 @@
-__VERSION__ = '1.0.0'
+__VERSION__ = '1.0.1'
 
 __ALL__ = [
-    'tab',
     'ctl',
+    'Tab',
+    'run_all',
 ]

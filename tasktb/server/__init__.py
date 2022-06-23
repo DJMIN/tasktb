@@ -4,6 +4,7 @@ from tasktb.default import SETTINGS
 import os
 import click
 import socket
+import time
 
 
 def run_app(host, port):
@@ -26,7 +27,7 @@ def run_app(host, port):
 
 def run_all(
         host="0.0.0.0", port=SETTINGS.WEB_PORT, redis_host=SETTINGS.REDIS_HOST,
-        redis_port=SETTINGS.REDIS_PORT, redis_db_task=SETTINGS.REDIS_DB_TASK, file='', url=''):
+        redis_port=SETTINGS.REDIS_PORT, redis_db_task=SETTINGS.REDIS_DB_TASK, file='', url='', block=True):
     """web manager runner"""
     if file:
         file_path = os.path.realpath(file)
@@ -57,4 +58,11 @@ def run_all(
     # main_manger_process.join_all()
     SETTINGS.set_setting("WEB_HOST", host if host != '0.0.0.0' else '127.0.0.1')
     SETTINGS.set_setting("WEB_PORT", port)
-    run_app(host, port)
+    if block:
+        run_app(host, port)
+    else:
+        main_manger_process.add_process(run_app, kwargs=dict(
+            host=host,
+            port=port,
+        ), max_times=1)
+        time.sleep(10)  # 等待建表等操作

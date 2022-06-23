@@ -9,13 +9,17 @@ import sqlite3
 
 print('sqlite version', sqlite3.sqlite_version_info, sqlite3.sqlite_version, sqlite3.__file__)
 
-# tasktb.run_all()
+tasktb.run_all(block=False)
+
+# tasktb.run_all(
+#     host="0.0.0.0", port=5127, redis_host='127.0.0.1',
+#     redis_port=6379, redis_db_task=11, url='sqlite+aiosqlite:///:memory:')
 
 # 启动服务
 # multiprocessing.Process(target=tasktb.run_app, args=('0.0.0.0', 5127)).start()
 
 # 等待初始化服务
-# time.sleep(5)
+time.sleep(5)
 
 # multiprocessing.Process(target=tasktb.task_publisher, args=('127.0.0.1', 6379, 11)).start()
 
@@ -27,12 +31,11 @@ tb = Tab('127.0.0.1:5127', project='p1', tasktype='t1')
 for j in range(20):
     print(tb.set_many([f"http://a.com?s={i}" for i in range(j*1000, (j+1)*1000)], status=0))
     print(tb.get(size=12))
-tb.update_tasks([
+print(tb.update_tasks([
     {'value': i} for i in range(10000)
-
 ],
     status=1
-)
+))
 # print(tb.get(size=12))
 # print(tb.update_tasks([
 #     {'value': 1},

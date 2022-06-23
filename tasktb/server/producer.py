@@ -9,6 +9,7 @@ import orjson
 # import psycopg2
 import walrus
 import functools
+import datetime
 import requests
 # from d22d.model.mysqlmodel import PGController
 from tasktb.model import get_db
@@ -22,6 +23,10 @@ logging_info = functools.partial(print, 'task_publisher log:')
 
 # BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # sys.path.append(BASE_DIR + '/manager')
+
+
+def now_str():
+    return datetime.datetime.now().__str__().split('.')[0]
 
 
 def task_publisher(host=SETTINGS.REDIS_HOST, port=SETTINGS.REDIS_PORT, db=SETTINGS.REDIS_DB_TASK, q_max=100):
@@ -43,7 +48,8 @@ def task_publisher(host=SETTINGS.REDIS_HOST, port=SETTINGS.REDIS_PORT, db=SETTIN
 
         if tasks_info['code'] != 20000:
             log = f'取不到任务，5秒后自动重试：{tasks_info}'
-            G['task_publisher'] = log
+            G['task_publisher'] = '取不到任务，5秒后自动重试'
+            G["task_publisher_error"] = f'[{now_str()}] {log}'
             logging_info(log)
             time.sleep(5)
             continue
@@ -94,9 +100,12 @@ def task_publisher(host=SETTINGS.REDIS_HOST, port=SETTINGS.REDIS_PORT, db=SETTIN
                 }
                 while len(dbq.List(qid)) > q_max:
                     time.sleep(1)
-                    logging_info(f'[{qid}]队列已满 ...[{len(dbq.List(qid))}/{q_max}]  now task:[{idx + 1}/{len(tasks)}]')
+                    logging_info(f'[{now_str()}] [{qid}]队列已满 ...[{len(dbq.List(qid))}/{q_max}]  now task:[{idx + 1}/{len(tasks)}]')
+                    G["task_publisher_error"] = f'[{now_str()}] [{qid}]队列已满 ...[{len(dbq.List(qid))}/{q_max}]  now task:[{idx + 1}/{len(tasks)}]'
+
                 dbq.List(qid).append(orjson.dumps(value))
-                logging_info(f'{set_tasks_raw(task_update)} ...{idx + 1}/{len(tasks)}')
+                res = set_tasks_raw(task_update)
+                logging_info(f'{res} ...{idx + 1}/{len(tasks)}')
                 task_update = []
         else:
             log = f'任务已经消费完毕，取不到任务，5秒后自动重试'
