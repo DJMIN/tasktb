@@ -16,7 +16,6 @@ import logging
 import collections
 import sqlalchemy.engine.row
 import sqlalchemy.exc
-import d22d
 
 from fastapi import Query, Body
 from sqlalchemy.dialects.sqlite import TEXT

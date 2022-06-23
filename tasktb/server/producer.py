@@ -1,28 +1,16 @@
-import datetime
-# import json
 import time
-# import os
-# import sys
-import logging
 from uuid import uuid1
 import orjson
-# import psycopg2
 import walrus
 import functools
 import datetime
 import requests
-# from d22d.model.mysqlmodel import PGController
-from tasktb.model import get_db
+import logging
 from tasktb.default import SETTINGS
-# from tasktb.server.base import main_manger_process
 from tasktb.function import list_task, set_tasks_raw, G
 
 # logging_info = logging.info
 logging_info = functools.partial(print, 'task_publisher log:')
-
-
-# BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# sys.path.append(BASE_DIR + '/manager')
 
 
 def now_str():

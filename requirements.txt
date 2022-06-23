@@ -17,8 +17,6 @@ walrus
 # pymysql
 # psycopg2
 # psycopg2-binary
-unrar-cffi
-d22d
 aiomysql
 async_pool_executor
 aiosqlite
