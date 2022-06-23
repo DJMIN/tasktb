@@ -14,7 +14,7 @@ import requests
 # from d22d.model.mysqlmodel import PGController
 from tasktb.model import get_db
 from tasktb.default import SETTINGS
-from tasktb.server.base import main_manger_process
+# from tasktb.server.base import main_manger_process
 from tasktb.function import list_task, set_tasks_raw, G
 
 # logging_info = logging.info

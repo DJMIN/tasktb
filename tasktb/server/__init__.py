@@ -1,8 +1,9 @@
-from .base import main_manger_process
+from .base import MangerProcess
 from .producer import task_publisher
 from tasktb.default import SETTINGS
 import os
 import click
+import multiprocessing
 import socket
 import time
 
@@ -50,6 +51,8 @@ def run_all(
     SETTINGS.set_setting("REDIS_HOST", redis_host)
     SETTINGS.set_setting("REDIS_PORT", redis_port)
     SETTINGS.set_setting("REDIS_DB_TASK", redis_db_task)
+    multiprocessing.freeze_support()
+    main_manger_process = MangerProcess()
     main_manger_process.add_process(task_publisher, kwargs=dict(
         host=SETTINGS.REDIS_HOST,
         port=SETTINGS.REDIS_PORT,
