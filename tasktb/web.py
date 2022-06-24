@@ -140,7 +140,7 @@ async def html_index():
         "server": 'tasktb', "msg": f"hello! http://127.0.0.1:{SETTINGS.WEB_PORT}/html/item",
         "db": SETTINGS.SQLALCHEMY_DATABASE_URL,
         "task_publisher": g.get('task_publisher'),
-        "task_publisher_error": g.get('task_publisher_error":'),
+        "task_publisher_error": g.get('task_publisher_error'),
         "remain_task": g.get('remain_task'),
         'server_time': time.time()
     }
