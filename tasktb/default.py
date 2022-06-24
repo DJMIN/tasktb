@@ -94,7 +94,6 @@ if __name__ =="__main__":
     #print list(select([moz_bookmarks, moz_bookmarksB], moz_bookmarks.c.b_id == moz_bookmarksB.c.id).execute())
 """
 
-import multiprocessing
 import json
 import os
 
@@ -130,6 +129,7 @@ class SettingOBJ(object):
                 self.data[k] = v
 
     def set_setting(self, k, v):
+        print(111111111111111,k,v,)
         self.data[k] = v
         with open(self.path, 'w', encoding='utf-8') as f:
             f.write(json.dumps(self.data, indent=4))

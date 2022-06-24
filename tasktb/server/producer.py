@@ -48,13 +48,9 @@ def task_publisher(host=SETTINGS.REDIS_HOST, port=SETTINGS.REDIS_PORT, db=SETTIN
         G["remain_task"] = tasks_info["total"]
         logging_info(log)
         if tasks:
-            logging_info(
-                set_tasks_raw(
-                    tasks,
-                    timelastproceed=time.time(),
-                ))
             task_update = []
             for idx, task in enumerate(tasks):
+                task['timelastproceed'] = time.time()
                 if not task.get('period'):
                     task['status'] = 1
                     # set_tasks_raw([task], status=1)
@@ -105,5 +101,7 @@ def task_publisher(host=SETTINGS.REDIS_HOST, port=SETTINGS.REDIS_PORT, db=SETTIN
 
 
 if __name__ == '__main__':
+    from tasktb.server.base import MangerProcess
+    main_manger_process = MangerProcess()
     main_manger_process.add_process(task_publisher)
     main_manger_process.join_all()

@@ -91,7 +91,9 @@ def get_engine_session():
             bind=_engine)
 
     else:
-        raise IOError('need aio')
+        logging.warning('need aio')
+        _engine, _SessionLocal = None, None
+        # raise IOError('need aio')
         # engine = create_engine(
         #     SQLALCHEMY_DATABASE_URL,
         #     pool_size=100,
