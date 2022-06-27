@@ -129,7 +129,6 @@ class SettingOBJ(object):
                 self.data[k] = v
 
     def set_setting(self, k, v):
-        print(111111111111111,k,v,)
         self.data[k] = v
         with open(self.path, 'w', encoding='utf-8') as f:
             f.write(json.dumps(self.data, indent=4))
@@ -173,6 +172,15 @@ class SettingOBJ(object):
     @deco_parm
     def REDIS_DB_TASK(self):
         return
+
+    @property
+    def IS_SQLITE(self):
+        return self.SQLALCHEMY_DATABASE_URL.startswith('sqlite')
+
+    @property
+    def IS_ASYNC(self):
+        return  ('aiomysql' in self.SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in self.SQLALCHEMY_DATABASE_URL) or (
+            "+asyncpg" in self.SQLALCHEMY_DATABASE_URL)
 
 
 SETTINGS = SettingOBJ()

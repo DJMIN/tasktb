@@ -23,7 +23,7 @@ from sqlalchemy.sql.expression import func
 from sqlalchemy.future import select
 from sqlalchemy import delete
 
-from tasktb.model import get_db, Session, IS_ASYNC
+from tasktb.model import get_db, Session
 from tasktb import model
 from tasktb.utils import get_req_data, format_to_table, format_to_form
 from tasktb.default import SETTINGS

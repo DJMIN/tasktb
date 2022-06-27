@@ -27,10 +27,6 @@ from sqlalchemy.future import select
 from fastapi import Request
 
 
-IS_SQLITE = SETTINGS.SQLALCHEMY_DATABASE_URL.startswith('sqlite')
-IS_ASYNC = ('aiomysql' in SETTINGS.SQLALCHEMY_DATABASE_URL) or ('aiosqlite' in SETTINGS.SQLALCHEMY_DATABASE_URL) or (
-            "+asyncpg" in SETTINGS.SQLALCHEMY_DATABASE_URL)
-
 if SETTINGS.SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
     sqlite_engine = create_async_engine(
         SETTINGS.SQLALCHEMY_DATABASE_URL,
@@ -47,7 +43,7 @@ def get_engine_session():
     if SETTINGS.SQLALCHEMY_DATABASE_URL == 'sqlite+aiosqlite:///:memory:':
         global sqlite_engine, sqlite_SessionLocal
         _engine, _SessionLocal = sqlite_engine, sqlite_SessionLocal
-    elif IS_SQLITE:
+    elif SETTINGS.IS_SQLITE:
         # 生成一个sqlite SQLAlchemy引擎
         _engine = create_async_engine(
             SETTINGS.SQLALCHEMY_DATABASE_URL,
@@ -58,7 +54,7 @@ def get_engine_session():
         # engine.execute("select 1").scalar()
         _SessionLocal = sessionmaker(class_=AsyncSession, future=True, autocommit=False, autoflush=True, bind=_engine)
 
-    elif IS_ASYNC:
+    elif SETTINGS.IS_ASYNC:
         from aiomysql.sa import create_engine as create_engine_aiomysql
         from aiomysql.pool import Pool as PoolAioMSQL
         _engine = create_async_engine(
@@ -75,7 +71,7 @@ def get_engine_session():
             expire_on_commit=False,  #
             bind=_engine)
 
-    elif IS_ASYNC:
+    elif SETTINGS.IS_ASYNC:
         _engine = create_async_engine(
             SETTINGS.SQLALCHEMY_DATABASE_URL,
             poolclass=SingletonThreadPool,  # 多线程优化
@@ -153,7 +149,7 @@ Base = declarative_base()
 
 def init_db():  # 初始化表
     print("初始化表中。。。")
-    if IS_ASYNC:
+    if SETTINGS.IS_ASYNC:
         async def start() -> declarative_base:
             _engine, _ = get_engine_session()
             Base.metadata.bind = _engine
@@ -166,7 +162,7 @@ def init_db():  # 初始化表
 
 
 def drop_db():  # 删除表
-    if IS_ASYNC:
+    if SETTINGS.IS_ASYNC:
         async def start() -> declarative_base:
             _engine, _ = get_engine_session()
             Base.metadata.bind = _engine
@@ -178,27 +174,27 @@ def drop_db():  # 删除表
         Base.metadata.drop_all(engine)
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
 
 
-if IS_ASYNC:
-    async def get_db() -> AsyncSession:
-        async with SessionLocal() as db:
-            try:
-                yield db
-            finally:
-                await db.close()
+# if SETTINGS.IS_ASYNC:
+async def get_db() -> AsyncSession:
+    async with SessionLocal() as db:
+        try:
+            yield db
+        finally:
+            await db.close()
 
 
 class User(Base, Mixin):
     __tablename__ = "user"
     username = Column(String(32), primary_key=True, nullable=False, index=True,
-                      # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+                      # **({"sqlite_on_conflict_primary_key":'REPLACE'} if SETTINGS.IS_SQLITE else {})
                       )
     password = Column(Text(), nullable=False)
     nickname = Column(String(32), nullable=False, index=True)
@@ -230,7 +226,7 @@ class User(Base, Mixin):
 class Task(Base, Mixin):
     __tablename__ = "task"
     tasktype = Column(VARCHAR(128), nullable=False, primary_key=True, index=True,
-                      # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+                      # **({"sqlite_on_conflict_primary_key":'REPLACE'} if SETTINGS.IS_SQLITE else {})
                       )
     qid = Column(Integer, nullable=False, index=True)
     info = Column(Text)
@@ -239,11 +235,11 @@ class Task(Base, Mixin):
 
 class Taskinstance(Base, Mixin):
     __tablename__ = SETTINGS.TABLE_NAME_TASKINSTANCE
-    iid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True,
-                 # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+    iid = Column(Integer if SETTINGS.IS_SQLITE else BigInteger, primary_key=True, autoincrement=True,
+                 # **({"sqlite_on_conflict_primary_key":'REPLACE'} if SETTINGS.IS_SQLITE else {})
                  )
     uuid = Column(VARCHAR(64), index=True, unique=True, comment='唯一索引',
-                  # **({"sqlite_on_conflict_unique":'REPLACE'} if IS_SQLITE else {})
+                  # **({"sqlite_on_conflict_unique":'REPLACE'} if SETTINGS.IS_SQLITE else {})
                   )
     project = Column(VARCHAR(16), index=True, comment='项目')
 
@@ -281,11 +277,11 @@ class Taskinstance(Base, Mixin):
     error = Column(Text, comment='任务错误次数')
 
     timecreate = Column(
-        BigInteger, server_default=sqlalchemy.func.strftime('%s', 'now') if IS_SQLITE else None, index=True)
+        BigInteger, server_default=sqlalchemy.func.strftime('%s', 'now') if SETTINGS.IS_SQLITE else None, index=True)
     timeupdate = Column(
         BigInteger,
-        server_default=sqlalchemy.func.strftime('%s', 'now') if IS_SQLITE else None,
-        onupdate=sqlalchemy.func.strftime('%s', 'now') if IS_SQLITE else sqlalchemy.func.unix_timestamp(), index=True)
+        server_default=sqlalchemy.func.strftime('%s', 'now') if SETTINGS.IS_SQLITE else None,
+        onupdate=sqlalchemy.func.strftime('%s', 'now') if SETTINGS.IS_SQLITE else sqlalchemy.func.unix_timestamp(), index=True)
     time_create = Column(DateTime(timezone=True), server_default=sqlalchemy.func.now(), index=True)
     time_update = Column(DateTime(timezone=True), server_default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now(),
                          index=True)
@@ -300,7 +296,7 @@ class Taskinstance(Base, Mixin):
         return Column(
             VARCHAR(64), index=True, unique=True,
             onupdate=f'{self.project}--{self.tasktype}--{self.key}', comment='唯一索引',
-            # **({"sqlite_on_conflict_unique":'REPLACE'} if IS_SQLITE else {})
+            # **({"sqlite_on_conflict_unique":'REPLACE'} if SETTINGS.IS_SQLITE else {})
         )
 
     def gen_uuid(self):
@@ -310,8 +306,8 @@ class Taskinstance(Base, Mixin):
 class Audit(Base, Mixin):
     __tablename__ = "audit"
 
-    uuid = Column(Integer if IS_SQLITE else BigInteger, primary_key=True, autoincrement=True,
-                  # **({"sqlite_on_conflict_primary_key":'REPLACE'} if IS_SQLITE else {})
+    uuid = Column(Integer if SETTINGS.IS_SQLITE else BigInteger, primary_key=True, autoincrement=True,
+                  # **({"sqlite_on_conflict_primary_key":'REPLACE'} if SETTINGS.IS_SQLITE else {})
                   )
     user = Column(String(256), index=True)
     client = Column(String(256), nullable=False, index=True)
@@ -358,7 +354,7 @@ class Audit(Base, Mixin):
         s = cls(**data)
 
         try:
-            if not IS_SQLITE:
+            if not SETTINGS.IS_SQLITE:
                 db.add(s)
                 await db.commit()
         # except sqlalchemy.exc.PendingRollbackError:
