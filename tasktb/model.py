@@ -108,6 +108,9 @@ engine, SessionLocal = get_engine_session()
 Base = declarative_base()
 
 
+def update_engine_session():
+    global engine, SessionLocal
+    engine, SessionLocal = get_engine_session()
 # LOOP = get_event_loop()
 
 

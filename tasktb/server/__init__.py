@@ -62,6 +62,8 @@ def run_all(
     SETTINGS.set_setting("WEB_HOST", host if host != '0.0.0.0' else '127.0.0.1')
     SETTINGS.set_setting("WEB_PORT", port)
     if block:
+        from tasktb.model import update_engine_session
+        update_engine_session()
         run_app(host, port)
     else:
         main_manger_process.add_process(run_app, kwargs=dict(
