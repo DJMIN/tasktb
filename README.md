@@ -1,6 +1,7 @@
 # tasktb
 
 极简的任务管理系统 （两行代码实现任务接受、生成、任务参数缓存过滤、优先级排序、分布式分发、频控等），基于HTTP接口或者python SDK进行任务管理
+两行代码即可快速实现生产者-消费者模型，并可控制优先级，开始暂停、周期任务、自动下发消息队列（redis）等
 
 ## START
 
@@ -16,11 +17,10 @@ python -m tasktb.ctl start -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:330
 from tasktb import Tab
 
 tb = Tab('127.0.0.1:5127', project='p1', tasktype='t1')
-print(tb.set("http://a.com", status=0))
-print(tb.get(size=100))
+print(tb.set(value="http://a.com", status=0, priority=0b11110000, period=0, qid=None, timecanstart=None))
+print(tb.get(size=1))
 print(tb.update_tasks([
-    {'value': 1},
-    {'value': 2},
+    {'value': "http://a.com"},
 ],
     status=1
 ))
