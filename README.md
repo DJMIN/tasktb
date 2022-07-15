@@ -1,11 +1,36 @@
 # tasktb
 
-任务参数管理系统 （任务接受、生成、任务参数缓存过滤、排序、分发、频控等）  （生产者框架）
+极简的任务管理系统 （两行代码实现任务接受、生成、任务参数缓存过滤、优先级排序、分布式分发、频控等），基于HTTP接口或者python SDK进行任务管理
+
+## START
+
+1.  服务端：启动web管理界面和接口
+```shell script
+pip install tasktb
+python -m tasktb.ctl start -p 5127 -u 'mysql+pymysql://mq:1234qwer@127.0.0.1:3306/test' -h '0.0.0.0' -l './tasktb.log'
+```
+
+2.  客户端：通过python sdk进行任务读写
+```python
+
+from tasktb import Tab
+
+tb = Tab('127.0.0.1:5127', project='p1', tasktype='t1')
+print(tb.set("http://a.com", status=0))
+print(tb.get(size=100))
+print(tb.update_tasks([
+    {'value': 1},
+    {'value': 2},
+],
+    status=1
+))
+
+```
 
 
-## RUN
+## MORE
 
-1. 服务端： 启动web管理界面和接口
+1. 更多服务端启动方式启动web管理界面和接口
 ```shell script
 pip install tasktb
 
@@ -51,7 +76,7 @@ nohup python3.9 -m tasktb.ctl run -p 5127 -f './tasktb.db' > tasktb.log 2>&1 &
 
 ```
 
-2.  
+2.  更多客户端任务管理
 ```python
 
 from tasktb import Tab
@@ -70,6 +95,7 @@ print(tb.update_tasks([
 ```
 
 ## sqlite upgrade
+如果使用sqlite作为任务管理数据库而且版本过低，需要更新
 ```shell script
 1.查看软连接版本
 /usr/bin/sqlite3 --version
