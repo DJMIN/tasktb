@@ -11,8 +11,8 @@ print('sqlite version', sqlite3.sqlite_version_info, sqlite3.sqlite_version, sql
 
 if __name__ == '__main__':
 
-    tasktb.run_all(block=False)
-
+    main_manger_process = tasktb.run_all(block=False)
+    print('等待初始化服务')
     # tasktb.run_all(
     #     host="0.0.0.0", port=5127, redis_host='127.0.0.1',
     #     redis_port=6379, redis_db_task=11, url='sqlite+aiosqlite:///:memory:')
@@ -38,6 +38,7 @@ if __name__ == '__main__':
     ],
         status=1
     ))
+    print(tb.info())
     # print(tb.get(size=12))
     # print(tb.update_tasks([
     #     {'value': 1},

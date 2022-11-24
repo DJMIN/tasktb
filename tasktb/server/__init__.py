@@ -71,3 +71,4 @@ def run_all(
             port=port,
         ), max_times=1)
         time.sleep(10)  # 等待建表等操作
+        return main_manger_process

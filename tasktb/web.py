@@ -435,7 +435,10 @@ async def list_item(
 
         while True:
             try:
-                results = (await db.scalars(q)).all()
+                if group_d or param_list:
+                    results = (await db.execute(q)).all()
+                else:
+                    results = (await db.scalars(q)).all()
                 break
             except sqlalchemy.exc.StatementError as ex:
                 # print(f'查询太快了，请等等,  {ex.__class__}')

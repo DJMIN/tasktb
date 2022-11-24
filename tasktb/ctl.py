@@ -125,4 +125,5 @@ ctl.add_command(show)
 https://stackoverflow.com/questions/43393764/python-3-6-project-structure-leads-to-runtimewarning
 """
 if __name__ == '__main__':
+    # sys.argv.append('run')
     ctl()

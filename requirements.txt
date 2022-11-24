@@ -21,3 +21,4 @@ aiomysql
 async_pool_executor
 aiosqlite
 asyncpg
+greenlet

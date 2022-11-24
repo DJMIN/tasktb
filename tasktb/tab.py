@@ -1,4 +1,4 @@
-from tasktb.function import list_task, set_task, set_tasks, set_tasks_raw
+from tasktb.function import list_task, set_task, set_tasks, set_tasks_raw, list_task_info
 from tasktb.default import SETTINGS
 
 
@@ -17,8 +17,8 @@ class Tab:
         self.project = project
         self.tasktype = tasktype
 
-    def get(self, size=10):
-        res = list_task(size=size, project=self.project, tasktype=self.tasktype, manager_url=self.manager_url)
+    def get(self, size=10, **kwargs):
+        res = list_task(size=size, project=self.project, tasktype=self.tasktype, manager_url=self.manager_url, **kwargs)
         return res
 
     def set(self, value, priority=0b11110000, period=0, qid=None, timecanstart=None, status=0):
@@ -37,3 +37,7 @@ class Tab:
             tasks,
             project=self.project, tasktype=self.tasktype,
             manager_url=self.manager_url, **kwargs)
+
+    def info(self, **kwargs):
+        res = list_task_info(project=self.project, tasktype=self.tasktype, manager_url=self.manager_url, **kwargs)
+        return res

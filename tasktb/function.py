@@ -84,6 +84,36 @@ def list_task(tasktype=None, size=10, status=None, project='default', timecansta
     return result
 
 
+def list_task_info(tasktype=None, status=None, project='default', timecanstart=0, group=None,
+              manager_url=f'{SETTINGS.WEB_HOST}:{SETTINGS.WEB_PORT}'):
+    result = requests.post(f'http://{manager_url}/api/item/{SETTINGS.TABLE_NAME_TASKINSTANCE}/list', json={
+        "filters": ([
+                        {
+                            'key': 'project',
+                            "value": project,
+                            'like': False,
+                            'typematch': True,
+                        }
+                    ] if project is not None else []) + ([{
+            'key': 'tasktype',
+            "value": tasktype,
+            'like': False,
+            'typematch': True,
+        }] if tasktype is not None else []) + ([{
+            'key': 'status',
+            "value": status,
+            'like': False,
+            'typematch': True,
+        }] if status is not None else []),
+        "range": {f"{SETTINGS.TABLE_NAME_TASKINSTANCE}___timecanstart": {"lte": timecanstart}},
+        "group": group or ['tasktype', 'status'],
+        "pageSize": 1,
+        "page": 1,
+        "index": 'idx_get_task'
+    }).json()
+    return result
+
+
 def set_task(tasktype, value, key='', project='default', priority=0b11110000,
              period=0, qid=None, timecanstart=None, status=0, manager_url=f'{SETTINGS.WEB_HOST}:{SETTINGS.WEB_PORT}', **kwargs):
     if not key:
