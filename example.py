@@ -2,16 +2,19 @@ import tasktb
 import multiprocessing
 import time
 import os
-os.environ['LD_LIBRARY_PATH']="/usr/local/lib"
+
+os.environ['LD_LIBRARY_PATH'] = "/usr/local/lib"
 # from pysqlite3 import dbapi2 as sqlite3
 import sqlite3
-
 
 print('sqlite version', sqlite3.sqlite_version_info, sqlite3.sqlite_version, sqlite3.__file__)
 
 if __name__ == '__main__':
-
-    main_manger_process = tasktb.run_all(block=False)
+    main_manger_process = tasktb.run_all(
+        url='mysql+aiomysql://root:1234qwerASDF@192.168.0.55:32224/test',
+        run_redis_produce=False,
+        host="0.0.0.0", redis_host='192.168.0.55',
+        redis_port=31999, redis_db_task=9, block=True)
     print('等待初始化服务')
     # tasktb.run_all(
     #     host="0.0.0.0", port=5127, redis_host='127.0.0.1',
@@ -31,7 +34,7 @@ if __name__ == '__main__':
     # print(tb.set("http://a.com", status=0))
     # 一条sqlite(websql)语句的参数不能超过999个。
     for j in range(20):
-        print(tb.set_many([f"http://a.com?s={i}" for i in range(j*1000, (j+1)*1000)], status=0))
+        print(tb.set_many([f"http://a.com?s={i}" for i in range(j * 1000, (j + 1) * 1000)], status=0))
         print(tb.get(size=12))
     print(tb.update_tasks([
         {'value': i} for i in range(10000)

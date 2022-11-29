@@ -107,8 +107,8 @@ def list_task_info(tasktype=None, status=None, project='default', timecanstart=0
         }] if status is not None else []),
         "range": {f"{SETTINGS.TABLE_NAME_TASKINSTANCE}___timecanstart": {"lte": timecanstart}},
         "group": group or ['tasktype', 'status'],
-        "pageSize": 1,
-        "page": 1,
+        # "pageSize": 0,
+        # "page": 0,
         "index": 'idx_get_task'
     }).json()
     return result

@@ -28,7 +28,8 @@ def run_app(host, port):
 
 def run_all(
         host="0.0.0.0", port=SETTINGS.WEB_PORT, redis_host=SETTINGS.REDIS_HOST,
-        redis_port=SETTINGS.REDIS_PORT, redis_db_task=SETTINGS.REDIS_DB_TASK, file='', url='', block=True):
+        redis_port=SETTINGS.REDIS_PORT, redis_db_task=SETTINGS.REDIS_DB_TASK, file='', url='',
+        run_redis_produce=True, block=True):
     """web manager runner"""
     if file:
         file_path = os.path.realpath(file)
@@ -53,11 +54,12 @@ def run_all(
     SETTINGS.set_setting("REDIS_DB_TASK", redis_db_task)
     multiprocessing.freeze_support()
     main_manger_process = MangerProcess()
-    main_manger_process.add_process(task_publisher, kwargs=dict(
-        host=SETTINGS.REDIS_HOST,
-        port=SETTINGS.REDIS_PORT,
-        db=SETTINGS.REDIS_DB_TASK, q_max=100
-    ))
+    if run_redis_produce:
+        main_manger_process.add_process(task_publisher, kwargs=dict(
+            host=SETTINGS.REDIS_HOST,
+            port=SETTINGS.REDIS_PORT,
+            db=SETTINGS.REDIS_DB_TASK, q_max=100
+        ))
     # main_manger_process.join_all()
     SETTINGS.set_setting("WEB_HOST", host if host != '0.0.0.0' else '127.0.0.1')
     SETTINGS.set_setting("WEB_PORT", port)
