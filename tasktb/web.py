@@ -265,8 +265,8 @@ async def get_item(item_name, req: fastapi.Request, db: Session = fastapi.Depend
 
 class ListItemParam(BaseModel):
     # uuid: str = Field(..., description="表名称", example="task")
-    page: int = Field(..., description="页码", example=1)
-    pageSize: int = Field(..., description="页面大小", example=20)
+    page: Optional[int] = Field(0, description="页码", example=1)
+    pageSize: Optional[int] = Field(0, description="页面大小", example=20)
     filters: Optional[list] = Field({}, description="过滤查询，完全匹配，K-V对list", example=[{
         'key': 'user',
         "value": "未登录",
